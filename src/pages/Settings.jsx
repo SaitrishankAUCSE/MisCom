@@ -162,11 +162,11 @@ export default function Settings() {
         {/* Security */}
         <Section icon="shield" title="Security & Cloud">
           <Row icon="cloud_sync" label="Cloud Sync Status" 
-            subtitle={FirebaseSync.isReady() ? "Connected to amerox-airdrop" : "Firebase not configured"} 
+            subtitle={FirebaseSync.isReady() ? "Connected to miscom-app" : "Firebase not configured"} 
             badge={FirebaseSync.isReady() ? "ACTIVE" : "OFFLINE"}
             onClick={() => {
               if (FirebaseSync.isReady()) {
-                toast("Syncing with amerox-airdrop.firebaseapp.com ✓");
+                toast("Syncing with miscom-app.firebaseapp.com ✓");
               } else {
                 toast("Firebase keys missing in environment");
               }

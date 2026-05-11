@@ -7,7 +7,7 @@ import Avatar from '../components/Avatar';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, logout, updateProfile, music, addToQueue, permissions, requestMicrophone, requestContacts } = useGlobal();
+  const { user, profile, logout, updateProfile, music, addToQueue, permissions, requestMicrophone, requestContacts } = useGlobal();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showEditAura, setShowEditAura] = useState(false);
   const [showToast, setShowToast] = useState('');
@@ -63,8 +63,8 @@ export default function Profile() {
         <section className="text-center space-y-4">
           <div className="relative inline-block">
             <Avatar 
-              src={user?.avatar} 
-              alt={user?.name} 
+              src={user?.avatar || profile?.avatar} 
+              alt={profile?.displayName || user?.name} 
               size="xl" 
               border={true}
               online={true}
@@ -72,15 +72,15 @@ export default function Profile() {
             />
             <motion.button
               whileTap={{ scale: 0.9 }}
-              onClick={() => setShowEditAura(true)}
+              onClick={() => navigate('/profile-setup')}
               className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary-container text-white flex items-center justify-center shadow-lg text-sm"
             >
               <span className="material-symbols-outlined text-[16px]">edit</span>
             </motion.button>
           </div>
           
-          <h1 className="font-display text-3xl font-bold">{user?.name || 'Alex'}</h1>
-          <p className="text-secondary text-sm">{user?.email || `@${user?.username}`}</p>
+          <h1 className="font-display text-3xl font-bold">{profile?.displayName || user?.name || 'Alex'}</h1>
+          <p className="text-secondary text-sm">@{profile?.username || user?.username}</p>
           
           <motion.button
             whileTap={{ scale: 0.95 }}

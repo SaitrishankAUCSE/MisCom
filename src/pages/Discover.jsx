@@ -110,7 +110,7 @@ export default function Discover() {
                    !friendIds.includes(u.uid) && 
                    !outgoing.includes(u.uid) && 
                    !incoming.includes(u.uid))
-      .map(u => ({ uid: u.uid, username: u.username, name: u.name, avatar: u.avatar, aura: u.aura }));
+      .map(u => ({ uid: u.uid, username: u.username, displayName: u.displayName || u.name || u.username, name: u.name, avatar: u.avatar, aura: u.aura }));
       
     // Deduplicate by username
     const unique = [];
@@ -174,7 +174,7 @@ export default function Discover() {
       // Save to recent searches
       setRecentSearches(prev => {
         const filtered = prev.filter(x => x.uid !== u.uid);
-        const updated = [{ uid: u.uid, username: u.username, name: u.name, avatar: u.avatar, aura: u.aura }, ...filtered].slice(0, 5);
+        const updated = [{ uid: u.uid, username: u.username, displayName: u.displayName || u.name || u.username, name: u.name, avatar: u.avatar, aura: u.aura }, ...filtered].slice(0, 5);
         localStorage.setItem('miscom_recent_searches', JSON.stringify(updated));
         return updated;
       });
@@ -196,7 +196,7 @@ export default function Discover() {
           </div>
         </div>
         <div className="min-w-0">
-          <h3 className="font-label-bold text-sm truncate">{u.name || u.username}</h3>
+          <h3 className="font-label-bold text-sm truncate">{u.displayName || u.name || u.username}</h3>
           <p className="text-[11px] text-secondary truncate">@{u.username}{u.aura ? ` · ${u.aura}` : ''}</p>
         </div>
       </div>
@@ -349,7 +349,7 @@ export default function Discover() {
                             )}
                           </div>
                           <div>
-                            <h3 className="font-label-bold text-[15px]">{req.fromUser?.name || 'User'}</h3>
+                            <h3 className="font-label-bold text-[15px]">{req.fromUser?.displayName || req.fromUser?.name || 'User'}</h3>
                             <p className="text-xs text-secondary">@{req.fromUser?.username}{req.fromUser?.aura ? ` · ${req.fromUser.aura}` : ''}</p>
                           </div>
                         </div>
@@ -394,8 +394,8 @@ export default function Discover() {
                             )}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="font-label-bold text-sm truncate">{f.name || f.username}</h3>
-                            <p className="text-[11px] text-green-600 font-label-bold">Synced ⚡</p>
+                            <h3 className="font-label-bold text-sm truncate">{f.displayName || f.name || f.username}</h3>
+                            <p className="text-[11px] text-green-600 font-label-bold">Synced ⚡ · @{f.username}</p>
                           </div>
                         </div>
                         <div className="w-9 h-9 rounded-full bg-primary-container/10 flex items-center justify-center text-primary-container shrink-0">

@@ -8,7 +8,7 @@ import { registerFCMToken } from '../lib/fcm';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, chats, rooms, music, timeAgo } = useGlobal();
+  const { user, profile, chats, rooms, music, timeAgo } = useGlobal();
 
   React.useEffect(() => {
     if (user?.uid) {
@@ -19,13 +19,16 @@ export default function Home() {
   const np = music?.nowPlaying || {};
   
   const allUsers = Backend.auth.getAllUsers();
-  const auraUsers = allUsers.map(u => ({
-    name: u.name || u.username,
-    status: u.aura || '✨ Exploring',
-    img: u.avatar || AVATARS[4],
-    active: u.uid === user?.uid, // Highlight the current user
-    uid: u.uid
-  }));
+  const auraUsers = allUsers.map(u => {
+    const isMe = u.uid === user?.uid;
+    return {
+      name: isMe ? (profile?.displayName || u.name || u.username) : (u.name || u.username),
+      status: isMe ? (profile?.aura || u.aura || '✨ Exploring') : (u.aura || '✨ Exploring'),
+      img: isMe ? (profile?.avatar || u.avatar || AVATARS[4]) : (u.avatar || AVATARS[4]),
+      active: isMe,
+      uid: u.uid
+    };
+  });
   
   // Make sure current user is always first
   auraUsers.sort((a, b) => (a.active ? -1 : (b.active ? 1 : 0)));
@@ -40,7 +43,7 @@ export default function Home() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
       className="bg-background text-on-background font-body-md antialiased pb-24">
-      <TopAppBar greeting={`${getGreeting()}, ${user?.name || 'Alex'} ✨`} />
+      <TopAppBar greeting={`${getGreeting()}, ${profile?.displayName || user?.name || 'Alex'} ✨`} />
 
       <main className="pt-24 px-margin-safe flex flex-col gap-10 pb-16">
         {/* AURA STATUS */}
