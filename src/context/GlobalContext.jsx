@@ -244,6 +244,61 @@ export function GlobalProvider({ children }) {
     throw new Error('Firebase not configured');
   };
 
+  const continueWithGoogle = async () => {
+    if (!FirebaseSync.isReady()) throw new Error('Firebase not initialized');
+    
+    // 1. Open Popup immediately (user-initiated)
+    const fbUser = await FirebaseSync.signInWithGoogle();
+    if (!fbUser) return null;
+
+    try {
+      // 2. Try to Login first
+      const result = await Backend.auth.loginWithGoogle(fbUser.email, fbUser.displayName, true);
+      const { user: u } = result;
+      
+      // Update from Google data
+      u.name = fbUser.displayName || u.name;
+      u.avatar = fbUser.photoURL || u.avatar;
+      u.email = fbUser.email || u.email;
+      
+      Backend.auth.updateProfile(u.uid, u);
+      await FirebaseSync.saveUser(u).catch(() => {});
+      
+      setUser(u);
+      setProfile(u);
+      refreshAll();
+      return { type: 'login', user: u };
+    } catch (err) {
+      // 3. If login failed because no account exists, we transition to Signup
+      if (err.message.includes('No account exists')) {
+        // Prepare suggested username
+        const suggested = fbUser.email.split('@')[0].replace(/[^a-z0-9_]/g, '').toLowerCase().slice(0, 15);
+        const status = await Backend.auth.checkUsername(suggested);
+        
+        if (status === 'available') {
+          // AUTO-SIGNUP: Create account instantly
+          const { user: u } = await Backend.auth.signupDirect(suggested, fbUser.email, 'google_authenticated', true, fbUser.uid);
+          u.displayName = fbUser.displayName || suggested;
+          u.avatar = fbUser.photoURL || '';
+          
+          await FirebaseSync.saveUser(u).catch(() => {});
+          setUser(u);
+          setProfile(u);
+          refreshAll();
+          return { type: 'signup_complete', user: u };
+        } else {
+          // MANUAL-SIGNUP required: Return the user info so the UI can pre-fill
+          return { 
+            type: 'signup_required', 
+            googleUser: fbUser,
+            suggestedUsername: suggested
+          };
+        }
+      }
+      throw err;
+    }
+  };
+
   const signupWithGoogle = async (username, email, password) => {
     if (FirebaseSync.isReady()) {
       // For Google, we already have a user in Firebase auth, but we need to create the profile
@@ -256,6 +311,7 @@ export function GlobalProvider({ children }) {
       
       await FirebaseSync.saveUser(u).catch(() => {});
       setUser(u);
+      setProfile(u); // Hydrate profile immediately
       refreshAll();
       return u;
     }

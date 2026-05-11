@@ -6,18 +6,30 @@ import { useGlobal } from '../context/GlobalContext';
 
 export default function AuthChoice() {
   const navigate = useNavigate();
-  const { loginWithGoogle } = useGlobal();
+  const { continueWithGoogle } = useGlobal();
 
   const handleGoogleAuth = async () => {
     try {
-      await loginWithGoogle();
-      navigate('/home');
+      const res = await continueWithGoogle();
+      if (!res) return; // Cancelled
+
+      if (res.type === 'login' || res.type === 'signup_complete') {
+        navigate('/home');
+      } else if (res.type === 'signup_required') {
+        // This is a rare fallback where auto-signup failed (username taken)
+        // We navigate to signup page and pass the data via state
+        navigate('/signup', { 
+          state: { 
+            googleUser: {
+              email: res.googleUser.email,
+              displayName: res.googleUser.displayName
+            },
+            suggestedUsername: res.suggestedUsername
+          }
+        });
+      }
     } catch (err) {
       console.error('Google Auth Error:', err);
-      // If no account exists, we should probably send them to signup
-      if (err.message.includes('No account exists') || err.message.includes('No Google session')) {
-        navigate('/signup?method=google');
-      }
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import Logo from '../components/Logo';
@@ -8,6 +8,7 @@ import FirebaseSync from '../lib/firebase';
 
 export default function Signup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { signup, signupWithGoogle } = useGlobal();
 
@@ -27,10 +28,20 @@ export default function Signup() {
   const [emailLocked, setEmailLocked] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get('method') === 'google') {
+    // 1. Check if we came from AuthChoice with pre-filled state
+    if (location.state?.googleUser) {
+      setEmail(location.state.googleUser.email);
+      setName(location.state.googleUser.displayName || '');
+      setEmailLocked(true);
+      setIsGooglePrefilled(true);
+      setUsername(location.state.suggestedUsername || '');
+      setSuccessMsg('Google verified! Please choose a unique username to finish.');
+    } 
+    // 2. Check if we just landed on the page with method=google
+    else if (searchParams.get('method') === 'google') {
       handleGoogleAuth();
     }
-  }, []);
+  }, [location.state]);
 
   // Real-time validation states
   const [usernameStatus, setUsernameStatus] = useState('idle');
@@ -148,22 +159,41 @@ export default function Signup() {
         return;
       }
 
-      // Pre-fill the form with Google data
-      setEmail(fbUser.email);
-      setName(fbUser.displayName || '');
-      setEmailLocked(true);
-      setIsGooglePrefilled(true);
-      const suggestedUsername = fbUser.email.split('@')[0].replace(/[^a-z0-9_]/g, '').slice(0, 20);
-      setUsername(suggestedUsername);
-      setSuccessMsg('Google verified! Now pick a username and confirm your details.');
-      setGoogleLoading(false);
-
-      // Scroll to password field
-      setTimeout(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      }, 200);
+      // 4. Try auto-finalize if everything is valid
+      const suggestedUsername = fbUser.email.split('@')[0].replace(/[^a-z0-9_]/g, '').toLowerCase().slice(0, 15);
+      
+      // Check if this suggested username is available
+      const status = await Backend.auth.checkUsername(suggestedUsername);
+      if (status === 'available') {
+        setUsername(suggestedUsername);
+        setSuccessMsg(`Welcome, ${fbUser.displayName}! Creating your account...`);
+        
+        // Short delay for visual feedback then finalize
+        setTimeout(async () => {
+          try {
+            await signupWithGoogle(suggestedUsername, fbUser.email, 'google_authenticated');
+            navigate('/setup');
+          } catch (err) {
+            setError(err.message);
+            setGoogleLoading(false);
+          }
+        }, 1500);
+      } else {
+        // Fallback: Let them choose a username
+        setEmail(fbUser.email);
+        setName(fbUser.displayName || '');
+        setEmailLocked(true);
+        setIsGooglePrefilled(true);
+        setUsername(suggestedUsername); // Put it there but let them edit
+        setGoogleLoading(false);
+        setSuccessMsg('Google verified! Please choose a username to finish.');
+      }
     } catch (err) {
-      setError(err.message || 'Google Sign-Up failed');
+      if (err.message.includes('cancelled') || err.message.includes('closed')) {
+        // User closed popup, just reset loading
+      } else {
+        setError(err.message || 'Google Sign-In failed');
+      }
       setGoogleLoading(false);
     }
   };
