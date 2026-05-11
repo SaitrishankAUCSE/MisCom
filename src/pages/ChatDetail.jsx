@@ -102,7 +102,7 @@ export default function ChatDetail() {
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <Avatar src={otherUser?.avatar || otherUser?.photoURL} size="w-10 h-10" />
           <div className="min-w-0">
-            <h2 className="font-label-bold text-[16px] truncate">{otherUser?.name || otherUser?.displayName || otherUser?.username || 'User'}</h2>
+            <h2 className="font-label-bold text-[16px] truncate">{otherUser?.displayName || otherUser?.name || otherUser?.username || 'User'}</h2>
             <p className="text-[10px] text-primary-container font-bold uppercase tracking-widest">
               {otherUser?.status === 'present' ? '⚡ Present' : '⚡ Reached'}
             </p>
@@ -139,7 +139,7 @@ export default function ChatDetail() {
           />
         ))}
 
-        <EchoingIndicator visible={isEchoing} name={otherUser?.name || otherUser?.displayName} />
+        <EchoingIndicator visible={isEchoing} name={otherUser?.displayName || otherUser?.name} />
         <div ref={messagesEndRef} className="h-4" />
       </main>
 

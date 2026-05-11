@@ -97,18 +97,7 @@ export default function Signup() {
     setLoading(true);
     setError('');
     try {
-      const u = await signup(username, email, password);
-      // Initialize Firestore stub for onboarding gate
-      if (u && FirebaseSync.isReady()) {
-        await setDoc(doc(db, 'users', u.uid), {
-          uid: u.uid,
-          email: u.email,
-          username: username.toLowerCase(),
-          displayName: name.trim(), // Use as display name
-          onboardingCompleted: false,
-          createdAt: serverTimestamp(),
-        }, { merge: true });
-      }
+      await signup(username, email, password);
       navigate('/setup');
     } catch (err) {
       setError(err.message);
@@ -124,17 +113,7 @@ export default function Signup() {
     setLoading(true);
     setError('');
     try {
-      const u = await signupWithGoogle(username, email, password);
-      if (u && FirebaseSync.isReady()) {
-        await setDoc(doc(db, 'users', u.uid), {
-          uid: u.uid,
-          email: u.email,
-          username: username.toLowerCase(),
-          displayName: name.trim(), // Use as display name
-          onboardingCompleted: false,
-          createdAt: serverTimestamp(),
-        }, { merge: true });
-      }
+      await signupWithGoogle(username, email, password);
       navigate('/setup');
     } catch (err) {
       setError(err.message);

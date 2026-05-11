@@ -136,7 +136,7 @@ const Backend = {
       return get(KEYS.USERS, []);
     },
 
-    signupDirect(username, email, password, isGoogleUser = false) {
+    signupDirect(username, email, password, isGoogleUser = false, customUid = null) {
       return new Promise((resolve, reject) => {
         setTimeout(() => {
           try {
@@ -146,29 +146,32 @@ const Backend = {
             if (eErr) return reject(new Error(eErr));
             const pErr = V.password(password);
             if (pErr) return reject(new Error(pErr));
-
+ 
             const users = get(KEYS.USERS, []);
             if (users.find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase())) return reject(new Error('Email already registered'));
             if (users.find(u => (u.username || '').toLowerCase() === (username || '').toLowerCase())) return reject(new Error('Username taken'));
-
+ 
             const newUser = {
-              uid: uid(), username, email: email.toLowerCase(),
+              uid: customUid || uid(), username, email: email.toLowerCase(),
               passwordHash: simpleHash(password),
               avatar: AVATARS[Math.floor(Math.random()*AVATARS.length)],
-              name: username, aura: '✨ Creating', bio: '',
+              name: username, 
+              displayName: username,
+              aura: '✨ Creating', bio: '',
               interests: [], musicGenres: [],
-              verified: true, // Auto-verify since they used Google
+              verified: true,
               createdAt: Date.now(),
               streakDays: 0, socialEnergy: 50,
-              isGoogleUser
+              isGoogleUser,
+              onboardingCompleted: false
             };
             users.push(newUser);
             set(KEYS.USERS, users);
-            
+             
             // Auto log in
             const token = uid() + '-' + Date.now();
             set(KEYS.SESSION, { uid: newUser.uid, token, loginAt: Date.now() });
-
+ 
             resolve({ user: newUser });
           } catch (e) {
             reject(e);
@@ -416,6 +419,18 @@ const Backend = {
           resolve(user);
         }, 800);
       });
+    },
+
+    restoreUser(profile) {
+      if (!profile || !profile.uid) return;
+      const users = get(KEYS.USERS, []);
+      const existingIdx = users.findIndex(u => u.uid === profile.uid);
+      if (existingIdx >= 0) {
+        users[existingIdx] = { ...users[existingIdx], ...profile };
+      } else {
+        users.push(profile);
+      }
+      set(KEYS.USERS, users);
     },
 
     loginWithGoogle(email = 'user@gmail.com', displayName = 'Alex', preventCreation = false) {

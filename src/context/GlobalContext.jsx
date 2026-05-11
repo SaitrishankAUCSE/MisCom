@@ -127,16 +127,22 @@ export function GlobalProvider({ children }) {
 
   // ── Auth ──
   const signup = async (username, email, password) => {
-    // Create local account directly (skip OTP)
-    const { user: u } = await Backend.auth.signupDirect(username, email, password, false);
-    // Sync to Firebase
     if (FirebaseSync.isReady()) {
-      await FirebaseSync.signUp(email, password).catch(() => {});
+      // 1. Create Firebase Auth user FIRST to get the official UID
+      const fbUser = await FirebaseSync.signUp(email, password);
+      
+      // 2. Use that official UID for the local profile
+      const { user: u } = await Backend.auth.signupDirect(username, email, password, false, fbUser.uid);
+      
+      // 3. Standardize and sync to cloud
+      u.displayName = u.name; // Standardize
       await FirebaseSync.saveUser(u).catch(() => {});
+      
+      setUser(u);
+      refreshAll();
+      return u;
     }
-    setUser(u);
-    refreshAll();
-    return u;
+    throw new Error('Firebase not initialized');
   };
 
   const verifyOtp = async (code) => {
@@ -156,32 +162,39 @@ export function GlobalProvider({ children }) {
     // 1. Try Firebase Auth first if ready
     if (FirebaseSync.isReady()) {
       try {
-        // Find user email first (needed for Firebase Sign In)
-        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-        let email = isEmail ? identifier : null;
-        
-        if (!email) {
-          const u = (Backend.auth.getAllUsers()).find(x => x.username.toLowerCase() === identifier.toLowerCase());
-          email = u?.email;
+        // Find user email if identifier is username
+        let email = identifier;
+        if (!identifier.includes('@')) {
+          const localUser = Backend.auth.getAllUsers().find(x => x.username.toLowerCase() === identifier.toLowerCase());
+          if (localUser) email = localUser.email;
         }
 
-        if (email) {
-          const fbUser = await FirebaseSync.signIn(email, password);
-          if (fbUser) {
-            // Firebase Auth succeeded! Now get/sync the local user
-            const u = await Backend.auth.login(identifier, password, true); // Pass true to skip local password check
-            setUser(u);
-            refreshAll();
-            await FirebaseSync.saveUser(u).catch(() => {});
-            return u;
+        const fbUser = await FirebaseSync.signIn(email, password);
+        if (fbUser) {
+          // Firebase Auth succeeded! Check local profile
+          let u = Backend.auth.getAllUsers().find(x => x.uid === fbUser.uid);
+          
+          if (!u) {
+            // Recover from cloud
+            const cloudProfile = await FirebaseSync.getUser(fbUser.uid);
+            if (cloudProfile) {
+              Backend.auth.restoreUser(cloudProfile);
+              u = cloudProfile;
+            } else {
+               throw new Error('Account verified but profile not found. Please contact support.');
+            }
           }
+
+          // Create local session
+          await Backend.auth.login(u.email, password, true);
+          setUser(u);
+          refreshAll();
+          return u;
         }
       } catch (err) {
-        // If Firebase explicitly says "wrong password", we should stop here
-        if (err.message.includes('password') || err.message.includes('auth/wrong-password')) {
-          throw new Error('Incorrect password');
-        }
-        // For other errors (like user not found in Firebase), fall back to local login
+        // If it's a password error, don't fall back
+        if (err.message.includes('password') || err.code?.includes('password')) throw err;
+        console.warn('[Login] Firebase login failed, attempting local fallback:', err.message);
       }
     }
 
@@ -221,14 +234,21 @@ export function GlobalProvider({ children }) {
   };
 
   const signupWithGoogle = async (username, email, password) => {
-    const { user: u } = await Backend.auth.signupDirect(username, email, password, true);
     if (FirebaseSync.isReady()) {
-      await FirebaseSync.signUp(email, password).catch(() => {});
+      // For Google, we already have a user in Firebase auth, but we need to create the profile
+      const fbUser = FirebaseSync.getCurrentUser();
+      if (!fbUser) throw new Error('No Google session found');
+
+      const { user: u } = await Backend.auth.signupDirect(username, email, password, true, fbUser.uid);
+      u.displayName = fbUser.displayName || u.name;
+      u.avatar = fbUser.photoURL || u.avatar;
+      
       await FirebaseSync.saveUser(u).catch(() => {});
+      setUser(u);
+      refreshAll();
+      return u;
     }
-    setUser(u);
-    refreshAll();
-    return u;
+    throw new Error('Firebase not initialized');
   };
 
   const updateProfile = async (updates) => {
