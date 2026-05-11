@@ -153,7 +153,10 @@ export default function Settings() {
         {/* Account */}
         <Section icon="person" title="Account">
           <Row icon="badge" label="Username" value={`@${user?.username || '—'}`} onClick={() => navigate('/profile-setup')} />
-          <Row icon="mail" label="Email" value={user?.email || '—'} onClick={() => toast('Email change coming soon')} />
+          <Row icon="mail" label="Email" 
+            value={user?.email ? `${user.email.split('@')[0].slice(0, 2)}***@${user.email.split('@')[1]}` : '—'} 
+            onClick={() => toast('Email change coming soon')} 
+          />
           <Row icon="interests" label="Interests" subtitle={user?.interests?.join(', ') || 'Not set'} onClick={() => navigate('/profile-setup')} />
           <Row icon="music_note" label="Music Genres" subtitle={user?.musicGenres?.join(', ') || 'Not set'} onClick={() => navigate('/profile-setup')} />
           <Row icon="palette" label="Appearance" subtitle="Theme, colors, font size" onClick={() => navigate('/appearance')} />
