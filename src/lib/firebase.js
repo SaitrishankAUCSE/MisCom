@@ -300,10 +300,12 @@ const FirebaseSync = {
       if (onUpdate) onUpdate();
     });
 
-    // Sync all friend requests (since we are a small app, we can just sync the whole collection or query by user)
+    // Sync friend requests relevant to the current user (incoming or outgoing)
     const unsubRequests = onSnapshot(collection(db, 'friend_requests'), (snap) => {
-      const requests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      localStorage.setItem('miscom_friend_requests', JSON.stringify(requests));
+      const allRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Filter locally for now as Firestore complex "OR" queries require multiple indexes
+      const myRequests = allRequests.filter(r => r.to === uid || r.from === uid);
+      localStorage.setItem('miscom_friend_requests', JSON.stringify(myRequests));
       if (onUpdate) onUpdate();
     });
 
