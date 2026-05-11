@@ -41,10 +41,13 @@ function Protected({ children }) {
 // Public Route — redirects authenticated users to /home (or onboarding if newly created)
 function PublicOnly({ children }) {
   const { isAuthenticated, isAuthLoading, user } = useGlobal();
+  const location = useLocation();
   if (isAuthLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
   
   if (isAuthenticated) {
-    if (user && !user.onboardingCompleted) {
+    // If we're on the signup page, go to onboarding. 
+    // If we're on the login page, go to home.
+    if (location.pathname === '/signup' && user && !user.onboardingCompleted) {
       return <Navigate to="/onboarding" replace />;
     }
     return <Navigate to="/home" replace />;
