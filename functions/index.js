@@ -207,6 +207,55 @@ exports.deleteUserAccount = functions.https.onCall(async (data, context) => {
   }
 });
 
+// ─── Friend Request Notification ──────────────────────────────────────────
+exports.onNewFriendRequest = onDocumentCreated(
+  'friend_requests/{requestId}',
+  async (event) => {
+    const req = event.data.data();
+    if (req.status !== 'pending') return;
+
+    // 1. Get sender info
+    const senderSnap = await db.doc(`users/${req.from}`).get();
+    const sender = senderSnap.exists ? senderSnap.data() : null;
+    const senderName = sender?.displayName || sender?.username || 'Someone';
+
+    // 2. Add to recipient's notification feed
+    await db.collection(`notifications/${req.to}/user_notifs`).add({
+      type: 'vibe_request',
+      requestId: event.params.requestId,
+      senderId: req.from,
+      senderName,
+      senderPhoto: sender?.avatar || null,
+      body: 'sent you a Vibe Request ✨',
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    // 3. Send Push Notification
+    const recipientSnap = await db.doc(`users/${req.to}`).get();
+    if (!recipientSnap.exists) return;
+    const recipient = recipientSnap.data();
+    const fcmToken = recipient.fcmToken;
+    if (!fcmToken) return;
+
+    try {
+      await getMessaging().send({
+        token: fcmToken,
+        notification: {
+          title: 'New Vibe Request ✨',
+          body: `${senderName} wants to connect with you!`,
+        },
+        data: {
+          type: 'vibe_request',
+          requestId: event.params.requestId,
+        }
+      });
+    } catch (err) {
+      console.warn('Friend request FCM failed:', err.message);
+    }
+  }
+);
+
 // ─── Global Nuclear Reset (Emergency Only) ───────────────────────────────
 exports.globalNuke = functions.https.onCall(async (data, context) => {
   // Only allow if the secret key matches

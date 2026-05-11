@@ -1004,8 +1004,17 @@ const Backend = {
       const q = query.toLowerCase();
       const results = users
         .filter(u => ((u.username || '').toLowerCase().includes(q) ||
+                      (u.displayName || '').toLowerCase().includes(q) ||
                       (u.name || '').toLowerCase().includes(q)))
-        .map(u => ({ uid: u.uid, username: u.username, name: u.name, avatar: u.avatar, aura: u.aura, bio: u.bio }));
+        .map(u => ({ 
+          uid: u.uid, 
+          username: u.username, 
+          displayName: u.displayName || u.name || u.username,
+          name: u.name, 
+          avatar: u.avatar, 
+          aura: u.aura, 
+          bio: u.bio 
+        }));
 
       // Deduplicate by username. If there are duplicates, prefer the one that matches the current user.
       const uniqueResults = [];
