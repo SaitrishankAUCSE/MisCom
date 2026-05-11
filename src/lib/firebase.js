@@ -276,6 +276,30 @@ const FirebaseSync = {
     } catch (e) { console.error(e); }
   },
 
+  // Save chat metadata so both users can see the conversation
+  async saveChatMeta(chatId, chatData) {
+    if (!firebaseReady || !db) return;
+    try {
+      await setDoc(doc(db, 'chat_meta', chatId), chatData, { merge: true });
+    } catch (e) { console.error(e); }
+  },
+
+  // Accept a vibe request in Firebase
+  async acceptVibeChat(chatId) {
+    if (!firebaseReady || !db) return;
+    try {
+      await updateDoc(doc(db, 'chat_meta', chatId), { isRequest: false, requestAccepted: true });
+    } catch (e) { console.error(e); }
+  },
+
+  // Delete a vibe request chat from Firebase
+  async deleteVibeChat(chatId) {
+    if (!firebaseReady || !db) return;
+    try {
+      await deleteDoc(doc(db, 'chat_meta', chatId));
+    } catch (e) { console.error(e); }
+  },
+
   listenMessages(chatId, onUpdate) {
     if (!firebaseReady || !db) return () => {};
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
@@ -342,10 +366,39 @@ const FirebaseSync = {
       if (onUpdate) onUpdate();
     });
 
+    // Sync chat metadata (vibe requests + active chats)
+    const unsubChatMeta = onSnapshot(collection(db, 'chat_meta'), (snap) => {
+      const allChatMeta = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Only keep chats where the current user is a participant
+      const myChats = allChatMeta.filter(c => c.participants && c.participants.includes(uid));
+      
+      // Merge into local chats
+      const localChats = JSON.parse(localStorage.getItem('miscom_chats') || '[]');
+      let changed = false;
+      
+      myChats.forEach(rc => {
+        const existingIdx = localChats.findIndex(lc => lc.id === rc.id);
+        if (existingIdx !== -1) {
+          // Update existing chat with Firebase data
+          localChats[existingIdx] = { ...localChats[existingIdx], ...rc };
+        } else {
+          // New chat from Firebase — add it
+          localChats.unshift(rc);
+          changed = true;
+        }
+      });
+      
+      if (changed || myChats.length > 0) {
+        localStorage.setItem('miscom_chats', JSON.stringify(localChats));
+        if (onUpdate) onUpdate();
+      }
+    });
+
     return () => {
       unsubUsers();
       unsubRequests();
       unsubFriends();
+      unsubChatMeta();
     };
   },
 };

@@ -6,19 +6,42 @@ import { useGlobal } from '../context/GlobalContext';
 
 export default function Chats() {
   const navigate = useNavigate();
-  const { getRegularChats, getIncomingMessageRequests, deleteChat, timeAgo } = useGlobal();
+  const { user, getRegularChats, getIncomingMessageRequests, deleteChat, timeAgo } = useGlobal();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [swipedChatId, setSwipedChatId] = useState(null);
   const [viewingRequests, setViewingRequests] = useState(false);
 
-  const regularChats = getRegularChats();
-  const incomingRequests = getIncomingMessageRequests();
+  const allChats = JSON.parse(localStorage.getItem('miscom_chats') || '[]');
   
-  const currentList = viewingRequests ? incomingRequests : regularChats;
+  // Regular chats: either not a request, or request accepted, or sent by me
+  const regularChats = allChats.filter(c => {
+    if (!c.participants || !c.participants.includes(user?.uid)) {
+      // Legacy chats without participants — keep for backwards compat
+      if (!c.isRequest) return true;
+      if (c.requestAccepted) return true;
+      if (c.requestFrom === user?.uid) return true;
+      return false;
+    }
+    if (!c.isRequest) return true;
+    if (c.requestAccepted) return true;
+    if (c.requestFrom === user?.uid) return true; // I sent it, show it to me
+    return false;
+  });
+
+  // Vibe Requests: incoming requests from non-friends
+  const vibeRequests = allChats.filter(c => {
+    if (!c.isRequest || c.requestAccepted) return false;
+    if (c.requestFrom === user?.uid) return false; // I sent this, not a request TO me
+    if (c.participants && !c.participants.includes(user?.uid)) return false;
+    return true;
+  });
+  
+  const currentList = viewingRequests ? vibeRequests : regularChats;
 
   const filteredChats = currentList.filter(chat =>
-    chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+    (chat.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (chat.senderName || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleDelete = (chatId) => {
@@ -75,10 +98,10 @@ export default function Chats() {
 
         <div className="flex items-center justify-between mb-6">
           <p className="font-body-lg text-body-lg text-secondary">{filteredChats.length} {viewingRequests ? 'requests' : 'conversations'}</p>
-          {!viewingRequests && incomingRequests.length > 0 && (
+          {!viewingRequests && vibeRequests.length > 0 && (
             <button onClick={() => setViewingRequests(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low text-primary-container rounded-full text-sm font-label-bold hover:bg-surface-variant transition-colors">
               <span className="material-symbols-outlined text-sm">mark_email_unread</span>
-              {incomingRequests.length} Requests
+              {vibeRequests.length} Vibe {vibeRequests.length === 1 ? 'Request' : 'Requests'}
             </button>
           )}
         </div>
@@ -117,9 +140,9 @@ export default function Chats() {
                       <div className="w-14 h-14 rounded-full bg-primary-container flex items-center justify-center">
                         <span className="material-symbols-outlined text-white text-2xl">group</span>
                       </div>
-                    ) : chat.avatar ? (
+                    ) : (chat.senderAvatar || chat.avatar) ? (
                       <>
-                        <img src={chat.avatar} alt={chat.name} className="w-14 h-14 rounded-full object-cover" />
+                        <img src={viewingRequests ? (chat.senderAvatar || chat.avatar) : chat.avatar} alt={chat.name} className="w-14 h-14 rounded-full object-cover" />
                         {chat.online && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-tertiary-container rounded-full border-2 border-surface-container-lowest" />}
                       </>
                     ) : (
@@ -127,14 +150,19 @@ export default function Chats() {
                         <span className="material-symbols-outlined text-secondary">person</span>
                       </div>
                     )}
+                    {viewingRequests && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary-container rounded-full flex items-center justify-center">
+                        <span className="material-symbols-outlined text-white text-[10px]">person_add</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline mb-1">
-                      <h3 className="font-headline-md text-[16px] font-bold truncate">{chat.name}</h3>
+                      <h3 className="font-headline-md text-[16px] font-bold truncate">{viewingRequests ? (chat.senderName || chat.name) : chat.name}</h3>
                       <span className="font-label-sm text-label-sm text-on-surface-variant shrink-0 ml-2">{timeAgo(chat.lastMessageTime)}</span>
                     </div>
                     <p className={`font-body-md text-[14px] truncate ${chat.typing ? 'text-primary-container animate-pulse italic' : 'text-on-surface-variant'}`}>
-                      {chat.typing ? 'vibing...' : chat.lastMessage}
+                      {chat.typing ? 'vibing...' : (viewingRequests ? '✦ Wants to vibe with you' : chat.lastMessage)}
                     </p>
                   </div>
                   {chat.unread > 0 && (

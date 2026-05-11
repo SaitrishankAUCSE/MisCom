@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import FirebaseSync from '../lib/firebase';
+import Backend from '../lib/backend';
 
 // ── Status terminology (MisCom style) ──
 // "beaming"  → sent (message left your device)
@@ -14,21 +15,31 @@ const STATUS_LABELS = {
   vibed: '✧ Vibed',
 };
 
-function uid() { return 'msg-' + Date.now() + Math.random().toString(36).slice(2, 8); }
+function msgUid() { return 'msg-' + Date.now() + Math.random().toString(36).slice(2, 8); }
 
 export default function ChatDetail() {
   const { chatId } = useParams();
   const navigate = useNavigate();
-  const { chats, user, markChatRead, acceptMessageRequest, deleteMessageRequest, timeAgo, refreshChats } = useGlobal();
+  const { chats, user, markChatRead, timeAgo, refreshChats } = useGlobal();
 
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [chatMeta, setChatMeta] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const unsubRef = useRef(null);
 
+  // Find this chat — could be local or from Firebase sync
   const chat = chats.find(c => c.id === chatId);
+
+  // Determine if users are friends
+  const otherUserId = chatId?.replace('chat-', '').split('-').find(id => id !== user?.uid);
+  const areFriends = (() => {
+    if (!user || !otherUserId) return false;
+    const friends = JSON.parse(localStorage.getItem('miscom_friends') || '{}');
+    return (friends[user.uid] || []).includes(otherUserId);
+  })();
 
   // ── Real-time listener ──
   useEffect(() => {
@@ -60,13 +71,24 @@ export default function ChatDetail() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Get other user's info
+  const otherUser = (() => {
+    if (!otherUserId) return null;
+    const users = JSON.parse(localStorage.getItem('miscom_users') || '[]');
+    return users.find(u => u.uid === otherUserId);
+  })();
+
+  // Is this a vibe request (non-friend message)?
+  const isVibeRequest = chat?.isRequest && !chat?.requestAccepted;
+  const isIncomingRequest = isVibeRequest && chat?.requestFrom !== user?.uid;
+
   // ── Send Message ──
   const handleSend = async () => {
     if (!newMsg.trim() || !user) return;
     const text = newMsg.trim();
     setNewMsg('');
 
-    const msgId = uid();
+    const msgId = msgUid();
     const msg = {
       id: msgId,
       senderId: user.uid,
@@ -74,18 +96,38 @@ export default function ChatDetail() {
       senderAvatar: user.avatar || null,
       text,
       timestamp: Date.now(),
-      status: 'beaming', // Just sent
+      status: 'beaming',
       type: 'text',
     };
 
-    // Optimistic update — show immediately
+    // Optimistic update
     setMessages(prev => [...prev, msg]);
 
     // Save to Firebase
     if (FirebaseSync.isReady()) {
       await FirebaseSync.sendMessage(chatId, msg);
-      // Update status to "landed" once Firebase confirms
       await FirebaseSync.updateMessageStatus(chatId, msgId, 'landed').catch(() => {});
+
+      // Save chat metadata for both users
+      const chatMetaData = {
+        id: chatId,
+        participants: [user.uid, otherUserId],
+        lastMessage: text,
+        lastMessageTime: Date.now(),
+        lastSenderId: user.uid,
+        // If not friends, mark as a vibe request
+        isRequest: !areFriends,
+        requestFrom: user.uid,
+        requestAccepted: areFriends,
+        // Contact info for both sides
+        name: otherUser?.name || otherUser?.username || 'User',
+        avatar: otherUser?.avatar || null,
+        contactId: otherUserId,
+        // Sender info (for the receiver's view)
+        senderName: user.name || user.username,
+        senderAvatar: user.avatar || null,
+      };
+      await FirebaseSync.saveChatMeta(chatId, chatMetaData);
     }
 
     // Update local chat preview
@@ -95,10 +137,60 @@ export default function ChatDetail() {
       allChats[ci].lastMessage = text;
       allChats[ci].lastMessageTime = Date.now();
       localStorage.setItem('miscom_chats', JSON.stringify(allChats));
-      refreshChats();
+    } else {
+      // Create local chat entry if it doesn't exist
+      allChats.unshift({
+        id: chatId,
+        contactId: otherUserId,
+        name: otherUser?.name || otherUser?.username || 'User',
+        avatar: otherUser?.avatar || null,
+        lastMessage: text,
+        lastMessageTime: Date.now(),
+        unread: 0,
+        online: false,
+        typing: false,
+        isGroup: false,
+        isRequest: !areFriends,
+        requestFrom: user.uid,
+        requestAccepted: areFriends,
+        participants: [user.uid, otherUserId],
+      });
+      localStorage.setItem('miscom_chats', JSON.stringify(allChats));
     }
-
+    refreshChats();
     inputRef.current?.focus();
+  };
+
+  // ── Accept Vibe Request ──
+  const handleAcceptRequest = async () => {
+    // Update local
+    const allChats = JSON.parse(localStorage.getItem('miscom_chats') || '[]');
+    const ci = allChats.findIndex(c => c.id === chatId);
+    if (ci !== -1) {
+      allChats[ci].isRequest = false;
+      allChats[ci].requestAccepted = true;
+      localStorage.setItem('miscom_chats', JSON.stringify(allChats));
+    }
+    refreshChats();
+
+    // Update Firebase
+    if (FirebaseSync.isReady()) {
+      await FirebaseSync.acceptVibeChat(chatId);
+    }
+  };
+
+  // ── Decline Vibe Request ──
+  const handleDeclineRequest = async () => {
+    // Remove local
+    const allChats = JSON.parse(localStorage.getItem('miscom_chats') || '[]');
+    localStorage.setItem('miscom_chats', JSON.stringify(allChats.filter(c => c.id !== chatId)));
+    refreshChats();
+
+    // Remove from Firebase
+    if (FirebaseSync.isReady()) {
+      await FirebaseSync.deleteVibeChat(chatId);
+    }
+    navigate('/chats');
   };
 
   const handleKeyDown = (e) => {
@@ -116,7 +208,11 @@ export default function ChatDetail() {
     return <span className={`text-[9px] font-label-bold ${color} ml-1`}>{label}</span>;
   };
 
-  if (!chat) {
+  // Determine display name and avatar (show the OTHER person's info)
+  const displayName = chat?.name || otherUser?.name || otherUser?.username || 'User';
+  const displayAvatar = chat?.avatar || otherUser?.avatar;
+
+  if (!chat && !otherUserId) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -142,24 +238,25 @@ export default function ChatDetail() {
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {chat.avatar ? (
+          {displayAvatar ? (
             <div className="relative shrink-0">
-              <img src={chat.avatar} alt={chat.name} className="w-10 h-10 rounded-full object-cover" />
-              {chat.online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-tertiary-container rounded-full border-2 border-white" />}
+              <img src={displayAvatar} alt={displayName} className="w-10 h-10 rounded-full object-cover" />
             </div>
           ) : (
             <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-white text-lg">group</span>
+              <span className="material-symbols-outlined text-white text-lg">person</span>
             </div>
           )}
           <div className="min-w-0">
-            <h2 className="font-headline-md text-[16px] font-bold truncate">{chat.name}</h2>
+            <h2 className="font-headline-md text-[16px] font-bold truncate">{displayName}</h2>
             <p className="text-xs text-secondary flex items-center gap-1">
-              {chat.isRequest && !chat.requestAccepted && chat.contactId === user?.uid ? (
-                <span className="text-primary-container font-label-bold">Message Request</span>
-              ) : isTyping ? (
-                <span className="text-primary-container animate-pulse">vibing...</span>
-              ) : chat.online ? 'In the Zone' : 'Away'}
+              {isIncomingRequest ? (
+                <span className="text-primary-container font-label-bold">Vibe Request</span>
+              ) : !areFriends && !chat?.requestAccepted ? (
+                <span className="text-orange-500 font-label-bold">Not Connected</span>
+              ) : (
+                <span>{areFriends ? '⚡ Connected' : 'Away'}</span>
+              )}
             </p>
           </div>
         </div>
@@ -171,8 +268,33 @@ export default function ChatDetail() {
         </button>
       </header>
 
+      {/* Vibe Request Banner (for non-friends) */}
+      {isIncomingRequest && (
+        <div className="fixed top-20 left-0 w-full z-40 bg-gradient-to-r from-primary-container/10 to-orange-50 border-b border-primary-container/20 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary-container/20 rounded-full flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-primary-container">person_add</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-label-bold">{displayName} wants to vibe with you</p>
+              <p className="text-[11px] text-secondary">Accept to start chatting freely</p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <motion.button whileTap={{ scale: 0.95 }} onClick={handleDeclineRequest}
+              className="flex-1 py-2 bg-surface-container-low text-error rounded-full text-sm font-label-bold">
+              Decline
+            </motion.button>
+            <motion.button whileTap={{ scale: 0.95 }} onClick={handleAcceptRequest}
+              className="flex-1 py-2 bg-primary-container text-white rounded-full text-sm font-label-bold shadow-lg">
+              Accept ⚡
+            </motion.button>
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
-      <main className="flex-1 pt-24 pb-24 px-4 overflow-y-auto">
+      <main className={`flex-1 ${isIncomingRequest ? 'pt-44' : 'pt-24'} pb-24 px-4 overflow-y-auto`}>
         <div className="flex flex-col gap-2">
           {/* Date separator */}
           {messages.length > 0 && (
@@ -212,7 +334,6 @@ export default function ChatDetail() {
                       ? 'bg-primary-container text-white rounded-br-md'
                       : 'bg-surface-container-low text-on-surface rounded-bl-md'
                   }`}>
-                    {/* Sender name for group-style context */}
                     {!isMe && msg.senderName && (
                       <p className="text-[11px] font-label-bold text-primary-container mb-1">{msg.senderName}</p>
                     )}
@@ -228,20 +349,12 @@ export default function ChatDetail() {
           </AnimatePresence>
           
           {isTyping && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex justify-start"
-            >
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
               <div className="bg-surface-container-low rounded-2xl rounded-bl-md px-4 py-3">
                 <div className="flex gap-1 items-center h-5">
                   {[0, 1, 2].map(i => (
-                    <motion.div
-                      key={i}
-                      className="w-2 h-2 bg-secondary rounded-full"
-                      animate={{ y: [0, -6, 0] }}
-                      transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.15 }}
-                    />
+                    <motion.div key={i} className="w-2 h-2 bg-secondary rounded-full"
+                      animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: i * 0.15 }} />
                   ))}
                 </div>
               </div>
@@ -252,24 +365,12 @@ export default function ChatDetail() {
         </div>
       </main>
 
-      {/* Input or Request Banner */}
+      {/* Input */}
       <div className="fixed bottom-0 left-0 w-full z-50 bg-white/95 backdrop-blur-xl border-t border-surface-variant/30 px-4 py-3">
-        {chat.isRequest && !chat.requestAccepted && chat.contactId === user?.uid ? (
-          <div className="flex flex-col gap-3 pb-2">
-            <div className="text-center pb-2 border-b border-surface-variant/30">
-              <p className="font-label-bold text-sm">Accept message request from {chat.name}?</p>
-              <p className="text-xs text-secondary mt-1">If you accept, they will be able to see when you've vibed their messages.</p>
-            </div>
-            <div className="flex gap-2">
-              <motion.button whileTap={{ scale: 0.95 }} onClick={() => { deleteMessageRequest(chatId); navigate('/chats'); }}
-                className="flex-1 py-2.5 bg-surface-container-low text-error rounded-full text-sm font-label-bold">
-                Decline
-              </motion.button>
-              <motion.button whileTap={{ scale: 0.95 }} onClick={() => acceptMessageRequest(chatId)}
-                className="flex-1 py-2.5 bg-primary-container text-white rounded-full text-sm font-label-bold shadow-lg">
-                Accept
-              </motion.button>
-            </div>
+        {/* If incoming request not yet accepted, block sending */}
+        {isIncomingRequest ? (
+          <div className="text-center py-2">
+            <p className="text-sm text-secondary">Accept the vibe request to reply</p>
           </div>
         ) : (
           <div className="flex items-center gap-3">
@@ -283,7 +384,7 @@ export default function ChatDetail() {
                 value={newMsg}
                 onChange={e => setNewMsg(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Beam a message..."
+                placeholder={areFriends ? "Beam a message..." : "Send a vibe request..."}
                 className="w-full bg-surface-container-low rounded-full px-4 py-3 pr-12 outline-none text-[14px] focus:ring-2 focus:ring-primary-container/30 transition-all"
               />
               <button className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-on-surface transition-colors">
