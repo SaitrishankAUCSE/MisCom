@@ -41,6 +41,37 @@ function Protected({ children, requiresOnboarding = false }) {
 
   const onboarded = profile?.onboardingCompleted === true && !!profile?.username;
 
+  // ── Online Presence Heartbeat ──────────────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated || !profile?.uid || !FirebaseSync.isReady()) return;
+
+    // Set online
+    FirebaseSync.updatePresence(profile.uid, 'online');
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        FirebaseSync.updatePresence(profile.uid, 'online');
+      } else {
+        FirebaseSync.updatePresence(profile.uid, 'offline');
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibility);
+    
+    // Heartbeat every 2 mins
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        FirebaseSync.updatePresence(profile.uid, 'online');
+      }
+    }, 120000);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(interval);
+      FirebaseSync.updatePresence(profile.uid, 'offline');
+    };
+  }, [isAuthenticated, profile?.uid]);
+
   if (requiresOnboarding) {
     // This route IS the setup screen — kick out users who already finished setup
     return onboarded ? <Navigate to="/home" replace /> : children;

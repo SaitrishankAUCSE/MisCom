@@ -73,10 +73,11 @@ const FirebaseSync = {
       const docId = (auth?.currentUser?.uid) || userData.uid;
       await Promise.race([
         setDoc(doc(db, 'users', docId), {
-          appUid: userData.uid || '',
-          username: userData.username || '',
-          email: userData.email || '',
-          name: userData.name || '',
+          ...userData,
+          normalizedUsername: (userData.username || '').toLowerCase(),
+          displayName: userData.displayName || userData.name || userData.username,
+          onlineStatus: 'online',
+          lastSeen: serverTimestamp(),
           avatar: userData.avatar || '',
           aura: userData.aura || '',
           bio: userData.bio || '',
@@ -97,6 +98,16 @@ const FirebaseSync = {
         console.warn('[MisCom] Firebase sync failed:', err.message);
       }
     }
+  },
+
+  async updatePresence(uid, status = 'online') {
+    if (!firebaseReady || !db || !uid) return;
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        onlineStatus: status,
+        lastSeen: serverTimestamp()
+      });
+    } catch (e) { console.warn('Presence update failed:', e); }
   },
 
   // Get user from Firestore
@@ -342,7 +353,10 @@ const FirebaseSync = {
   async saveChatMeta(chatId, chatData) {
     if (!firebaseReady || !db) return;
     try {
-      await setDoc(doc(db, 'chat_meta', chatId), chatData, { merge: true });
+      await setDoc(doc(db, 'chats', chatId), {
+        ...chatData,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
     } catch (e) { console.error(e); }
   },
 
@@ -350,7 +364,11 @@ const FirebaseSync = {
   async acceptVibeChat(chatId) {
     if (!firebaseReady || !db) return;
     try {
-      await updateDoc(doc(db, 'chat_meta', chatId), { isRequest: false, requestAccepted: true });
+      await updateDoc(doc(db, 'chats', chatId), { 
+        chatType: 'direct',
+        requestStatus: 'accepted',
+        updatedAt: serverTimestamp()
+      });
     } catch (e) { console.error(e); }
   },
 
@@ -358,7 +376,7 @@ const FirebaseSync = {
   async deleteVibeChat(chatId) {
     if (!firebaseReady || !db) return;
     try {
-      await deleteDoc(doc(db, 'chat_meta', chatId));
+      await deleteDoc(doc(db, 'chats', chatId));
     } catch (e) { console.error(e); }
   },
 
@@ -438,10 +456,10 @@ const FirebaseSync = {
     });
 
     // Sync chat metadata (vibe requests + active chats)
-    const unsubChatMeta = onSnapshot(collection(db, 'chat_meta'), (snap) => {
-      const allChatMeta = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const unsubChats = onSnapshot(collection(db, 'chats'), (snap) => {
+      const allChats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       // Only keep chats where the current user is a participant
-      const myChats = allChatMeta.filter(c => c.participants && c.participants.includes(uid));
+      const myChats = allChats.filter(c => c.participants && c.participants.includes(uid));
       
       // Merge into local chats
       const localChats = JSON.parse(localStorage.getItem('miscom_chats') || '[]');
@@ -453,7 +471,7 @@ const FirebaseSync = {
         if (existingIdx !== -1) {
           const old = localChats[existingIdx];
           // Check if there is a new message from someone else
-          if (rc.lastMessageTime > old.lastMessageTime && rc.lastSenderId !== uid) {
+          if (rc.lastTimestamp > (old.lastTimestamp || 0) && rc.lastSenderId !== uid) {
             newToast = {
               title: rc.senderName || rc.name || 'New Message',
               body: rc.lastMessage,
@@ -468,12 +486,12 @@ const FirebaseSync = {
           localChats.unshift(rc);
           changed = true;
           // Check if it's a new vibe request directed at us
-          if (rc.isRequest && !rc.requestAccepted && rc.requestFrom !== uid) {
+          if (rc.chatType === 'request' && rc.requestStatus === 'pending' && rc.requestFrom !== uid) {
             newToast = {
               title: 'New Vibe Request',
               body: `${rc.senderName || rc.name || 'Someone'} wants to vibe with you`,
               avatar: rc.senderAvatar || rc.avatar,
-              link: `/chats`,
+              link: `/requests`,
             };
           }
         }

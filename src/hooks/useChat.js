@@ -17,7 +17,7 @@ export function useChat(chatId, currentUserId) {
   // ── Live chat meta listener (locking/connection status) ──────────────────
   useEffect(() => {
     if (!chatId || !FirebaseSync.isReady()) return;
-    const unsub = onSnapshot(doc(db, 'chat_meta', chatId), (snap) => {
+    const unsub = onSnapshot(doc(db, 'chats', chatId), (snap) => {
       if (snap.exists()) setChatMeta(snap.data());
     });
     return unsub;
@@ -54,7 +54,7 @@ export function useChat(chatId, currentUserId) {
   // ── Typing indicator listener ────────────────────────────────────────────
   useEffect(() => {
     if (!chatId || !currentUserId || !FirebaseSync.isReady()) return;
-    const typingRef = doc(db, `chat_typing/${chatId}`);
+    const typingRef = doc(db, `typing_status/${chatId}`);
     const unsub = onSnapshot(typingRef, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
@@ -70,7 +70,7 @@ export function useChat(chatId, currentUserId) {
   // ── Announce "I am echoing..." ────────────────────────────────────────────
   const announceEchoing = useCallback(async () => {
     if (!chatId || !currentUserId || !FirebaseSync.isReady()) return;
-    const typingRef = doc(db, `chat_typing/${chatId}`);
+    const typingRef = doc(db, `typing_status/${chatId}`);
     await setDoc(typingRef, { [currentUserId]: true }, { merge: true });
 
     // Auto-clear after 3s of no keystrokes
@@ -83,7 +83,7 @@ export function useChat(chatId, currentUserId) {
   const clearEchoing = useCallback(async () => {
     if (!chatId || !currentUserId || !FirebaseSync.isReady()) return;
     clearTimeout(typingTimer.current);
-    const typingRef = doc(db, `chat_typing/${chatId}`);
+    const typingRef = doc(db, `typing_status/${chatId}`);
     await setDoc(typingRef, { [currentUserId]: false }, { merge: true });
   }, [chatId, currentUserId]);
 
@@ -95,12 +95,16 @@ export function useChat(chatId, currentUserId) {
     const payload = {
       senderId:   currentUserId,
       text:       text || null,
-      type,                          // 'text' | 'image' | 'video' | 'audio' | 'dissolved'
+      type,                          // 'text' | 'image' | 'video' | 'audio' | 'file'
       mediaUrl,
-      replyTo,                       // { messageId, text, senderId } for echo-back
-      status:     STATUS.ECHOED,
-      resonances: {},                // { uid: emoji } for reactions
-      dissolved:  false,
+      thumbnailUrl: type === 'video' ? (mediaUrl + '?thumb=1') : null, // Simulated thumbnail
+      replyTo,                       
+      status:     STATUS.ECHOED,     // 'sent'
+      deliveredTo: [],               // Users who received the message
+      seenBy:     [],                // Users who read the message
+      resonances: {},                
+      edited:     false,
+      editedAt:   null,
       createdAt:  serverTimestamp(),
     };
 
@@ -108,11 +112,12 @@ export function useChat(chatId, currentUserId) {
       collection(db, `chats/${chatId}/messages`), payload
     );
 
-    // Update chat_meta last message preview
-    await updateDoc(doc(db, `chat_meta/${chatId}`), {
+    // Update chat metadata in 'chats' collection
+    await updateDoc(doc(db, `chats/${chatId}`), {
       lastMessage:   text || (type === 'image' ? '📷 Photo' : '🎤 Voice'),
       lastSenderId:  currentUserId,
       lastTimestamp: serverTimestamp(),
+      updatedAt:     serverTimestamp()
     });
 
     return ref.id;

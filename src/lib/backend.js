@@ -1113,8 +1113,11 @@ const Backend = {
           contactId: req.from,
           name: friendUser?.name || friendUser?.username || 'Friend',
           avatar: friendUser?.avatar || null,
-          lastMessage: 'You are now friends! 🎉',
-          lastMessageTime: Date.now(),
+          lastMessage: 'You are now connected! 🎉',
+          lastTimestamp: Date.now(),
+          chatType: 'direct',
+          requestStatus: 'accepted',
+          participants: [userId, req.from],
           unread: 1,
           online: false,
           typing: false,
@@ -1122,7 +1125,7 @@ const Backend = {
         });
         set(KEYS.CHATS, chats);
         const msgs = get(KEYS.MESSAGES, {});
-        msgs[chatId] = [{ id: 'sys-' + Date.now(), sender: 'system', text: 'You are now friends! Start chatting 🎉', timestamp: Date.now(), type: 'text' }];
+        msgs[chatId] = [{ id: 'sys-' + Date.now(), sender: 'system', text: 'You are now connected! Start chatting 🎉', timestamp: Date.now(), type: 'text' }];
         set(KEYS.MESSAGES, msgs);
       }
 
