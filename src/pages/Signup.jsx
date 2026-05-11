@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import Logo from '../components/Logo';
 import Backend from '../lib/backend';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import FirebaseSync from '../lib/firebase';
 
 export default function Signup() {
@@ -74,11 +76,18 @@ export default function Signup() {
     setError('');
     try {
       const u = await signup(username, email, password);
-      // Update display name immediately
-      if (u) {
-        updateProfile({ name: name.trim() });
+      // Initialize Firestore stub for onboarding gate
+      if (u && FirebaseSync.isReady()) {
+        await setDoc(doc(db, 'users', u.uid), {
+          uid: u.uid,
+          email: u.email,
+          username: username.toLowerCase(),
+          name: name.trim(),
+          onboardingCompleted: false,
+          createdAt: serverTimestamp(),
+        }, { merge: true });
       }
-      navigate('/onboarding');
+      navigate('/setup');
     } catch (err) {
       setError(err.message);
       setLoading(false);
@@ -94,10 +103,17 @@ export default function Signup() {
     setError('');
     try {
       const u = await signupWithGoogle(username, email, password);
-      if (u) {
-        updateProfile({ name: name.trim() });
+      if (u && FirebaseSync.isReady()) {
+        await setDoc(doc(db, 'users', u.uid), {
+          uid: u.uid,
+          email: u.email,
+          username: username.toLowerCase(),
+          name: name.trim(),
+          onboardingCompleted: false,
+          createdAt: serverTimestamp(),
+        }, { merge: true });
       }
-      navigate('/onboarding');
+      navigate('/setup');
     } catch (err) {
       setError(err.message);
       setLoading(false);

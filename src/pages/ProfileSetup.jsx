@@ -1,260 +1,301 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { doc, setDoc, serverTimestamp, getDocs, query, collection, where } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage, FirebaseSync } from '../lib/firebase';
 import { useGlobal } from '../context/GlobalContext';
-import FirebaseSync from '../lib/firebase';
-import { AVATARS } from '../lib/backend';
-
-const AURA_OPTIONS = ['🔥 On Fire', '🎧 Vibing', '🌙 Relaxing', '🎮 Gaming', '✨ Creating', '💭 Thinking'];
-const INTERESTS = ['Photography', 'Web3', 'Fashion', 'Gaming', 'Fitness', 'Art', 'Travel', 'Food'];
-const MUSIC_GENRES = ['Lo-Fi', 'Hip Hop', 'R&B', 'Pop', 'Indie', 'EDM', 'Rock', 'Jazz'];
+import Logo from '../components/Logo';
 
 export default function ProfileSetup() {
+  const { user, refreshProfile, updateProfile } = useGlobal();
   const navigate = useNavigate();
-  const { updateProfile, user } = useGlobal();
 
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    displayName: user?.name || '',
-    username: user?.username || '',
-    avatar: user?.avatar || AVATARS[0],
-    bio: user?.bio || '',
-    aura: user?.aura || '',
-    interests: user?.interests || [],
-    music: user?.musicGenres || []
-  });
-  const [usernameStatus, setUsernameStatus] = useState('idle'); // idle, checking, available, unavailable, invalid
+  const [step, setStep] = useState(1); // 1 = username, 2 = details, 3 = avatar
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef();
 
-  const toggleArrayItem = (field, item) => {
-    setFormData(prev => {
-      const arr = prev[field];
-      if (arr.includes(item)) return { ...prev, [field]: arr.filter(i => i !== item) };
-      if (arr.length >= 3) return prev; // max 3 selections
-      return { ...prev, [field]: [...arr, item] };
-    });
+  // ── Username validation ──────────────────────────────────────────────────
+  const validateUsername = (val) => /^[a-z0-9_.]{3,24}$/.test(val);
+
+  const checkUsernameAvailable = async (val) => {
+    if (!FirebaseSync.isReady()) return true;
+    const q = query(collection(db, 'users'), where('username', '==', val.toLowerCase()));
+    const snap = await getDocs(q);
+    return snap.empty;
   };
 
-  // Real-time username validation
-  useEffect(() => {
-    if (step !== 2) return;
-    
-    const un = formData.username;
-    if (!un) {
-      setUsernameStatus('idle');
+  // ── Step 1: claim username ────────────────────────────────────────────────
+  const handleUsernameNext = async () => {
+    setError('');
+    const cleaned = username.trim().toLowerCase();
+    if (!validateUsername(cleaned)) {
+      setError('3–24 characters. Letters, numbers, . and _ only.');
       return;
     }
-    
-    // Check regex: 3-20 chars, alphanumeric and underscores only
-    const isValid = /^[a-zA-Z0-9_]{3,20}$/.test(un);
-    if (!isValid) {
-      setUsernameStatus('invalid');
-      return;
-    }
+    setSaving(true);
+    const available = await checkUsernameAvailable(cleaned);
+    setSaving(false);
+    if (!available) { setError('That username is taken.'); return; }
+    setUsername(cleaned);
+    setStep(2);
+  };
 
-    setUsernameStatus('checking');
-    const delayDebounceFn = setTimeout(async () => {
-      if (FirebaseSync.isReady()) {
-        const userExists = await FirebaseSync.getUserByIdentifier(un);
-        setUsernameStatus(userExists ? 'unavailable' : 'available');
-      } else {
-        // Fallback for local testing
-        const localUsers = JSON.parse(localStorage.getItem('miscom_users') || '[]');
-        const exists = localUsers.some(u => (u.username || '').toLowerCase() === un.toLowerCase());
-        setUsernameStatus(exists ? 'unavailable' : 'available');
+  // ── Step 2: display name + bio ───────────────────────────────────────────
+  const handleDetailsNext = () => {
+    setError('');
+    if (!displayName.trim()) { setError('Display name is required.'); return; }
+    if (displayName.trim().length > 50) { setError('Display name is too long.'); return; }
+    setStep(3);
+  };
+
+  // ── Step 3: avatar + final save ──────────────────────────────────────────
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleFinish = async () => {
+    setError('');
+    setSaving(true);
+    try {
+      let photoURL = user?.avatar || null;
+
+      if (avatarFile && FirebaseSync.isReady()) {
+        const storageRef = ref(storage, `avatars/${user.uid}`);
+        await uploadBytes(storageRef, avatarFile);
+        photoURL = await getDownloadURL(storageRef);
       }
-    }, 500);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [formData.username, step]);
+      const profileData = {
+        uid: user.uid,
+        email: user.email,
+        username: username,
+        displayName: displayName.trim(),
+        name: displayName.trim(), // Keep 'name' field for compatibility
+        bio: bio.trim(),
+        avatar: photoURL,
+        photoURL: photoURL,
+        onboardingCompleted: true,
+        updatedAt: serverTimestamp(),
+      };
 
-  const handleNext = () => {
-    if (step < 4) setStep(step + 1);
-    else {
-      updateProfile({
-        name: formData.displayName || 'User',
-        username: formData.username.toLowerCase(),
-        avatar: formData.avatar,
-        bio: formData.bio,
-        aura: formData.aura || '🔥 On Fire',
-        interests: formData.interests,
-        musicGenres: formData.music,
-        onboardingCompleted: true
-      });
-      navigate('/welcome');
+      if (FirebaseSync.isReady()) {
+        await setDoc(doc(db, 'users', user.uid), profileData, { merge: true });
+      }
+      
+      // Update local state
+      await updateProfile(profileData);
+      await refreshProfile();
+      
+      navigate('/home', { replace: true });
+    } catch (err) {
+      console.error(err);
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-background min-h-screen flex flex-col relative overflow-x-hidden overflow-y-auto px-6 py-10 font-body-md text-on-background"
-    >
-      <div className="absolute top-0 right-0 w-[40vw] h-[40vw] bg-primary-container/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3 z-0" />
-      
-      <div className="w-full max-w-md mx-auto z-10 flex flex-col min-h-screen">
-        {/* Progress */}
-        <div className="w-full flex gap-2 mb-10 pt-4">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-1.5 flex-1 rounded-full overflow-hidden bg-surface-variant">
-              <motion.div 
-                className="h-full bg-primary-container"
-                initial={{ width: 0 }}
-                animate={{ width: step >= i ? '100%' : '0%' }}
-                transition={{ duration: 0.4 }}
-              />
-            </div>
-          ))}
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-10 font-body-md text-on-background relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 right-0 w-[50vw] h-[50vw] bg-primary-container/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 z-0" />
+      <div className="absolute bottom-0 left-0 w-[50vw] h-[50vw] bg-primary-container/5 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/3 z-0" />
+
+      <div className="w-full max-w-md z-10">
+        <div className="flex flex-col items-center mb-10">
+          <Logo className="w-12 h-12 mb-6" showText={false} />
+          <div className="flex gap-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step === i ? 'w-8 bg-primary-container' : 'w-2 bg-on-background/10'}`} />
+            ))}
+          </div>
         </div>
 
-        {/* Form Container */}
-        <div className="flex-1">
-          <AnimatePresence mode="wait">
-            {step === 1 && (
-              <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full">
-                <h1 className="font-display text-4xl font-bold tracking-tight mb-2">Build your identity</h1>
-                <p className="text-secondary mb-10">How should people recognize you?</p>
+        <AnimatePresence mode="wait">
+          {step === 1 && (
+            <motion.div
+              key="step1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col gap-6"
+            >
+              <div>
+                <h1 className="font-display text-3xl font-bold mb-2 tracking-tight">Claim your identity</h1>
+                <p className="text-on-surface-variant text-base opacity-70">Choose a unique username. This is how you'll be echoed across MisCom.</p>
+              </div>
 
-                <div className="flex flex-col items-center mb-8 relative">
-                  <div className="w-32 h-32 rounded-full border-4 border-primary-container/30 flex items-center justify-center bg-surface relative overflow-hidden group cursor-pointer hover:border-primary-container transition-colors shadow-xl">
-                    <img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="material-symbols-outlined text-white text-2xl">edit</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4 overflow-x-auto max-w-full pb-2 scrollbar-hide">
-                    {AVATARS.map((av, i) => (
-                      <button key={i} onClick={() => setFormData({...formData, avatar: av})} 
-                        className={`w-10 h-10 rounded-full border-2 shrink-0 transition-all ${formData.avatar === av ? 'border-primary-container scale-110' : 'border-surface-variant hover:border-primary-container/50'}`}>
-                        <img src={av} className="w-full h-full rounded-full" />
-                      </button>
-                    ))}
-                  </div>
+              <div className="space-y-4">
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-container font-bold text-xl opacity-50">@</span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={e => { setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '')); setError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleUsernameNext()}
+                    placeholder="username"
+                    autoFocus
+                    className="w-full bg-surface-container-high border-2 border-on-background/5 rounded-2xl pl-10 pr-4 py-4 outline-none focus:border-primary-container transition-all text-lg font-bold"
+                  />
                 </div>
+                <p className="text-[11px] font-label-bold text-on-surface-variant/40 uppercase tracking-widest pl-2">
+                  3–24 characters · Letters, numbers, . and _
+                </p>
+              </div>
 
-                <div className="flex flex-col gap-4">
-                  <div className="relative group">
-                    <label className="text-xs font-label-bold text-secondary ml-4 mb-1 block">Display Name (Visible to everyone)</label>
-                    <input type="text" placeholder="e.g. Alex ✨" value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} className="w-full bg-transparent border-2 border-surface-variant rounded-[1.25rem] px-4 py-4 outline-none focus:border-primary-container transition-colors font-body-lg" />
-                  </div>
-                  <div className="relative group">
-                    <label className="text-xs font-label-bold text-secondary ml-4 mb-1 block">Bio (Optional)</label>
-                    <textarea rows={3} placeholder="What's your vibe?" value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full bg-transparent border-2 border-surface-variant rounded-[1.25rem] px-4 py-4 outline-none focus:border-primary-container transition-colors font-body-lg resize-none" />
-                  </div>
+              {error && (
+                <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-base">error</span>
+                  {error}
                 </div>
-              </motion.div>
-            )}
+              )}
 
-            {step === 2 && (
-              <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full">
-                <h1 className="font-display text-4xl font-bold tracking-tight mb-2">Claim your handle</h1>
-                <p className="text-secondary mb-10">Your unique, permanent identity.</p>
-
-                <div className="relative group">
-                  <label className="text-xs font-label-bold text-secondary ml-4 mb-1 block">Username</label>
-                  <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary font-body-lg">@</div>
-                    <input 
-                      type="text" 
-                      placeholder="alexvibes" 
-                      value={formData.username} 
-                      onChange={e => setFormData({...formData, username: e.target.value.toLowerCase().trim()})} 
-                      className={`w-full bg-transparent border-2 rounded-[1.25rem] pl-9 pr-12 py-4 outline-none transition-colors font-body-lg ${usernameStatus === 'invalid' ? 'border-error focus:border-error' : usernameStatus === 'available' ? 'border-green-500 focus:border-green-500' : usernameStatus === 'unavailable' ? 'border-error focus:border-error' : 'border-surface-variant focus:border-primary-container'}`} 
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
-                      {usernameStatus === 'checking' && <div className="w-5 h-5 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" />}
-                      {usernameStatus === 'available' && <span className="material-symbols-outlined text-green-500">check_circle</span>}
-                      {usernameStatus === 'unavailable' && <span className="material-symbols-outlined text-error">cancel</span>}
-                    </div>
-                  </div>
-                  <div className="ml-4 mt-2 h-4 text-xs font-label-bold">
-                    {usernameStatus === 'invalid' && <span className="text-error">3-20 chars, letters, numbers, underscores only.</span>}
-                    {usernameStatus === 'unavailable' && <span className="text-error">Username is already taken.</span>}
-                    {usernameStatus === 'available' && <span className="text-green-500">Username is available!</span>}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full">
-                <h1 className="font-display text-4xl font-bold tracking-tight mb-2">Set your Aura</h1>
-                <p className="text-secondary mb-10">What's your current energy?</p>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {AURA_OPTIONS.map(aura => (
-                    <motion.button
-                      key={aura}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setFormData({...formData, aura})}
-                      className={`p-4 rounded-2xl border-2 text-left font-label-bold transition-all ${formData.aura === aura ? 'border-primary-container bg-primary-container/5 text-primary-container shadow-[0_0_15px_rgba(225,29,72,0.15)]' : 'border-surface-variant text-on-surface hover:border-on-surface/20'}`}
-                    >
-                      {aura}
-                    </motion.button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {step === 4 && (
-              <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full">
-                <h1 className="font-display text-4xl font-bold tracking-tight mb-2">Your World</h1>
-                <p className="text-secondary mb-10">Pick up to 3 for each to personalize your space.</p>
-
-                <div className="mb-8">
-                  <h3 className="font-label-bold text-sm text-secondary mb-3">Interests</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {INTERESTS.map(item => {
-                      const isSelected = formData.interests.includes(item);
-                      return (
-                        <button key={item} onClick={() => toggleArrayItem('interests', item)} className={`px-4 py-2 rounded-full border text-sm font-label-bold transition-all ${isSelected ? 'bg-primary-container border-primary-container text-white' : 'bg-transparent border-surface-variant text-on-surface hover:bg-surface'}`}>
-                          {item}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-label-bold text-sm text-secondary mb-3">Music Genres</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {MUSIC_GENRES.map(item => {
-                      const isSelected = formData.music.includes(item);
-                      return (
-                        <button key={item} onClick={() => toggleArrayItem('music', item)} className={`px-4 py-2 rounded-full border text-sm font-label-bold transition-all ${isSelected ? 'bg-primary-container border-primary-container text-white' : 'bg-transparent border-surface-variant text-on-surface hover:bg-surface'}`}>
-                          {item}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-auto pt-8 pb-4 flex justify-between gap-4">
-          {step > 1 && (
-            <button onClick={() => setStep(step - 1)} className="w-14 h-[60px] rounded-[2rem] border-2 border-surface-variant flex items-center justify-center hover:bg-surface transition-colors">
-              <span className="material-symbols-outlined">arrow_back</span>
-            </button>
+              <button
+                onClick={handleUsernameNext}
+                disabled={saving || username.length < 3}
+                className="w-full bg-primary-container text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-primary-container/20 disabled:opacity-40 transition-all active:scale-95"
+              >
+                {saving ? 'Validating…' : 'Next Step'}
+              </button>
+            </motion.div>
           )}
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={handleNext}
-            disabled={(step === 1 && !formData.displayName) || (step === 2 && usernameStatus !== 'available')}
-            className="flex-1 bg-primary-container text-white rounded-[2rem] h-[60px] font-bold text-lg shadow-[0_8px_20px_rgba(225,29,72,0.3)] hover:shadow-[0_12px_25px_rgba(225,29,72,0.4)] transition-all flex items-center justify-center gap-2 overflow-hidden group disabled:opacity-50 relative"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
-            {step === 4 ? 'Complete Setup' : 'Continue'}
-            {step < 4 && <span className="material-symbols-outlined">arrow_forward</span>}
-          </motion.button>
-        </div>
+
+          {step === 2 && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col gap-6"
+            >
+              <div>
+                <h1 className="font-display text-3xl font-bold mb-2 tracking-tight">The finishing touch</h1>
+                <p className="text-on-surface-variant text-base opacity-70">Your display name is how you'll appear in chats and stories.</p>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="text-[11px] font-label-bold text-on-surface-variant/50 uppercase tracking-widest mb-2 block pl-1">Display Name</label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={e => { setDisplayName(e.target.value); setError(''); }}
+                    placeholder="Full Name"
+                    className="w-full bg-surface-container-high border-2 border-on-background/5 rounded-2xl px-5 py-4 outline-none focus:border-primary-container transition-all text-lg"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-label-bold text-on-surface-variant/50 uppercase tracking-widest mb-2 block pl-1">Short Bio <span className="opacity-40">(optional)</span></label>
+                  <textarea
+                    value={bio}
+                    onChange={e => setBio(e.target.value)}
+                    placeholder="Tell the circle a bit about yourself…"
+                    rows={3}
+                    className="w-full bg-surface-container-high border-2 border-on-background/5 rounded-2xl px-5 py-4 outline-none focus:border-primary-container transition-all text-base resize-none"
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-error/10 border border-error/20 text-error px-4 py-3 rounded-xl flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-base">error</span>
+                  {error}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStep(1)}
+                  className="px-6 h-14 rounded-2xl border-2 border-on-background/5 font-bold hover:bg-on-background/5 transition-colors"
+                >
+                  <span className="material-symbols-outlined">arrow_back</span>
+                </button>
+                <button
+                  onClick={handleDetailsNext}
+                  className="flex-1 bg-primary-container text-white h-14 rounded-2xl font-bold text-lg shadow-xl shadow-primary-container/20 active:scale-95 transition-all"
+                >
+                  Almost there
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col gap-8"
+            >
+              <div className="text-center">
+                <h1 className="font-display text-3xl font-bold mb-2 tracking-tight">Your Visual Aura</h1>
+                <p className="text-on-surface-variant text-base opacity-70">Pick a profile picture to represent you.</p>
+              </div>
+
+              <div className="flex flex-col items-center gap-6">
+                <div className="relative group">
+                  <div
+                    onClick={() => fileRef.current?.click()}
+                    className="w-32 h-32 rounded-full bg-surface-container-highest border-4 border-primary-container/20 overflow-hidden flex items-center justify-center cursor-pointer hover:border-primary-container transition-all relative"
+                  >
+                    {avatarPreview ? (
+                      <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="material-symbols-outlined text-4xl opacity-30">add_a_photo</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    className="absolute bottom-0 right-0 w-10 h-10 bg-primary-container text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-xl">{avatarPreview ? 'edit' : 'add'}</span>
+                  </button>
+                </div>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={handleFinish}
+                  disabled={saving}
+                  className="w-full bg-primary-container text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-primary-container/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {saving ? (
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
+                  ) : (
+                    <>Let's Vibe 🎉</>
+                  )}
+                </button>
+                <button
+                  onClick={handleFinish}
+                  disabled={saving}
+                  className="w-full text-on-surface-variant/60 font-bold uppercase tracking-widest text-xs py-2"
+                >
+                  Skip for now
+                </button>
+              </div>
+
+              <button
+                onClick={() => setStep(2)}
+                className="self-center text-sm font-bold opacity-40 hover:opacity-100 transition-opacity"
+              >
+                Go Back
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </motion.div>
+    </div>
   );
 }
-

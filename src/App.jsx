@@ -29,30 +29,31 @@ import PostSignupOnboarding from './pages/PostSignupOnboarding';
 import Appearance from './pages/Appearance';
 import BottomNav from './components/BottomNav';
 import { GlobalProvider, useGlobal } from './context/GlobalContext';
+import { useNotifications } from './hooks/useNotifications';
+import NotificationToast from './components/NotificationToast';
 
 // Protected Route — redirects unauthenticated users to /auth-choice
-function Protected({ children }) {
-  const { isAuthenticated, isAuthLoading } = useGlobal();
+function Protected({ children, requiresOnboarding = false }) {
+  const { isAuthenticated, isAuthLoading, profile } = useGlobal();
   if (isAuthLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
   if (!isAuthenticated) return <Navigate to="/auth-choice" replace />;
-  return children;
+
+  const onboarded = profile?.onboardingCompleted === true;
+
+  if (requiresOnboarding) {
+    // This route IS the setup screen — kick out users who already finished setup
+    return onboarded ? <Navigate to="/home" replace /> : children;
+  } else {
+    // This route is an app screen — kick out users who haven't finished setup yet
+    return onboarded ? children : <Navigate to="/setup" replace />;
+  }
 }
 
-// Public Route — redirects authenticated users to /home (or onboarding if newly created)
+// Public Route — redirects authenticated users to /home
 function PublicOnly({ children }) {
-  const { isAuthenticated, isAuthLoading, user } = useGlobal();
-  const location = useLocation();
+  const { isAuthenticated, isAuthLoading } = useGlobal();
   if (isAuthLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
-  
-  if (isAuthenticated) {
-    // If we're on the signup page, go to onboarding. 
-    // If we're on the login page, go to home.
-    if (location.pathname === '/signup' && user && !user.onboardingCompleted) {
-      return <Navigate to="/onboarding" replace />;
-    }
-    return <Navigate to="/home" replace />;
-  }
-  
+  if (isAuthenticated) return <Navigate to="/home" replace />;
   return children;
 }
 
@@ -61,46 +62,17 @@ const BOTTOM_NAV_PATHS = ['/home', '/chats', '/discover', '/secret-spaces', '/vi
 function AppRoutes() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { globalToast, setGlobalToast } = useGlobal();
+  const { profile } = useGlobal();
   const showBottomNav = BOTTOM_NAV_PATHS.includes(location.pathname);
+
+  // Real-time notifications for the whole app
+  const { notifications, unreadCount, toast, setToast, markRead, markAllRead } 
+    = useNotifications(profile?.uid);
 
   return (
     <div className="relative min-h-screen bg-background">
       {/* Global In-App Notification Toast */}
-      <AnimatePresence>
-        {globalToast && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 16, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="fixed top-0 left-4 right-4 z-[100] cursor-pointer"
-            onClick={() => {
-              setGlobalToast(null);
-              if (globalToast.link) navigate(globalToast.link);
-            }}
-          >
-            <div className="bg-surface-container-high/90 backdrop-blur-xl border border-on-background/10 rounded-2xl p-4 shadow-2xl flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant ring-2 ring-primary-container/20 shrink-0">
-                {globalToast.avatar ? (
-                  <img src={globalToast.avatar} alt="Sender" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <span className="material-symbols-outlined text-secondary text-xl">person</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-label-bold text-[15px] text-on-surface truncate">{globalToast.title}</h4>
-                <p className="font-body-sm text-[13px] text-on-surface-variant truncate mt-0.5">{globalToast.body}</p>
-              </div>
-              <div className="shrink-0 flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary-container animate-pulse">new_releases</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <NotificationToast toast={toast} onDismiss={() => setToast(null)} />
 
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
@@ -113,10 +85,15 @@ function AppRoutes() {
           <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
           <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
           <Route path="/otp" element={<PublicOnly><OTPVerification /></PublicOnly>} />
-          <Route path="/profile-setup" element={<Protected><ProfileSetup /></Protected>} />
-          <Route path="/welcome" element={<Protected><Welcome /></Protected>} />
+          
+          {/* Setup / Identity Gate */}
+          <Route path="/setup" element={
+            <Protected requiresOnboarding={true}>
+              <ProfileSetup />
+            </Protected>
+          } />
 
-          {/* Protected */}
+          {/* Core Protected Routes */}
           <Route path="/home" element={<Protected><Home /></Protected>} />
           <Route path="/chats" element={<Protected><Chats /></Protected>} />
           <Route path="/chat/:chatId" element={<Protected><ChatDetail /></Protected>} />
@@ -125,15 +102,15 @@ function AppRoutes() {
           <Route path="/profile" element={<Protected><Profile /></Protected>} />
           <Route path="/music" element={<Protected><LiveMusic /></Protected>} />
           <Route path="/ai-insights" element={<Protected><AIInsights /></Protected>} />
-          
-          {/* Admin Tools */}
-          <Route path="/nuke" element={<NukeDatabase />} />
           <Route path="/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/secret-spaces" element={<Protected><ProtectedRooms /></Protected>} />
           <Route path="/room/:roomId" element={<Protected><RoomChat /></Protected>} />
           <Route path="/discover" element={<Protected><Discover /></Protected>} />
-          <Route path="/onboarding" element={<Protected><PostSignupOnboarding /></Protected>} />
           <Route path="/appearance" element={<Protected><Appearance /></Protected>} />
+          
+          {/* Admin / Utility */}
+          <Route path="/nuke" element={<NukeDatabase />} />
+          <Route path="/onboarding" element={<Navigate to="/setup" replace />} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />

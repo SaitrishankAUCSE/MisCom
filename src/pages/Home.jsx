@@ -4,10 +4,17 @@ import { motion } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import TopAppBar from '../components/TopAppBar';
 import Backend, { AVATARS } from '../lib/backend';
+import { registerFCMToken } from '../lib/fcm';
 
 export default function Home() {
   const navigate = useNavigate();
   const { user, chats, rooms, music, timeAgo } = useGlobal();
+
+  React.useEffect(() => {
+    if (user?.uid) {
+      registerFCMToken(user.uid);
+    }
+  }, [user]);
 
   const np = music?.nowPlaying || {};
   

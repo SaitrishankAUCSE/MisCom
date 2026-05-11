@@ -7,6 +7,7 @@ export function useGlobal() { return useContext(GlobalContext); }
 
 export function GlobalProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [chats, setChats] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -50,7 +51,15 @@ export function GlobalProvider({ children }) {
   useEffect(() => {
     Backend.init();
     const saved = Backend.auth.getSession();
-    if (saved) setUser(saved);
+    if (saved) {
+      setUser(saved);
+      // Fetch Firestore profile to check onboardingCompleted
+      if (FirebaseSync.isReady()) {
+        FirebaseSync.getUser(saved.uid).then(p => {
+          if (p) setProfile(p);
+        }).catch(() => {});
+      }
+    }
     setChats(Backend.chats.getAll());
     setRooms(Backend.rooms.getAll());
     setMusic(Backend.music.get());
@@ -199,16 +208,23 @@ export function GlobalProvider({ children }) {
     setUser(null);
   };
 
-  const updateProfile = (updates) => {
+  const updateProfile = async (updates) => {
     if (!user) return;
     const updated = Backend.auth.updateProfile(user.uid, updates);
     if (updated) {
       setUser({ ...updated });
+      setProfile(prev => ({ ...prev, ...updates }));
       // Sync to Firebase so changes persist across devices/sessions
       if (FirebaseSync.isReady()) {
-        FirebaseSync.saveUser(updated).catch(() => {});
+        await FirebaseSync.saveUser(updated).catch(() => {});
       }
     }
+  };
+
+  const refreshProfile = async () => {
+    if (!user || !FirebaseSync.isReady()) return;
+    const p = await FirebaseSync.getUser(user.uid);
+    if (p) setProfile(p);
   };
 
   const deleteAccount = async (password) => {
@@ -320,8 +336,8 @@ export function GlobalProvider({ children }) {
 
   return (
     <GlobalContext.Provider value={{
-      user, isAuthLoading, isAuthenticated, pendingEmail,
-      signup, signupWithGoogle, verifyOtp, resendOtp, login, loginWithGoogle, logout, updateProfile, deleteAccount,
+      user, profile, isAuthLoading, isAuthenticated, pendingEmail,
+      signup, signupWithGoogle, verifyOtp, resendOtp, login, loginWithGoogle, logout, updateProfile, refreshProfile, deleteAccount,
       permissions, requestMicrophone, requestContacts,
       chats, refreshChats, getMessages, sendMessage, markChatRead, deleteChat,
       createOrGetDM, getRegularChats, getIncomingMessageRequests, acceptMessageRequest, deleteMessageRequest,
