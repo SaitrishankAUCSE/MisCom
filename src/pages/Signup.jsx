@@ -62,7 +62,7 @@ export default function Signup() {
   ];
 
   const passwordsMatch = confirm.length > 0 && password === confirm;
-  const isFormValid = usernameStatus === 'available' && emailValid === true && strength >= 4 && passwordsMatch;
+  const isFormValid = usernameStatus === 'available' && (emailValid === true || emailLocked) && strength >= 4 && passwordsMatch;
 
   // ── Email Signup: creates account directly (no OTP needed) ──
   const handleEmailSignup = async (e) => {
