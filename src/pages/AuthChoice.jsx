@@ -22,7 +22,7 @@ export default function AuthChoice() {
           className="relative w-48 h-48 mb-12 flex items-center justify-center">
           <div className="absolute inset-0 bg-gradient-to-tr from-primary-container/20 to-transparent rounded-full blur-2xl" />
           <motion.div animate={{ y: [-5, 5, -5] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
-            className="w-32 h-32 bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white shadow-[0_20px_40px_-15px_rgba(225,29,72,0.3)] flex flex-col items-center justify-center z-10">
+            className="w-32 h-32 bg-surface/80 backdrop-blur-xl rounded-[2rem] border border-surface-variant/20 shadow-[0_20px_40px_-15px_rgba(225,29,72,0.3)] flex flex-col items-center justify-center z-10">
             <Logo className="w-16 h-16" showText={false} />
           </motion.div>
         </motion.div>
@@ -40,7 +40,7 @@ export default function AuthChoice() {
           </button>
 
           <button onClick={() => navigate('/signup')}
-            className="w-full bg-white text-on-background border-2 border-surface-variant rounded-[2rem] py-5 font-bold text-lg shadow-sm hover:border-primary-container hover:text-primary-container hover:scale-[1.02] transition-all duration-300">
+            className="w-full bg-surface text-on-background border-2 border-surface-variant rounded-[2rem] py-5 font-bold text-lg shadow-sm hover:border-primary-container hover:text-primary-container hover:scale-[1.02] transition-all duration-300">
             Create Account
           </button>
 
@@ -51,7 +51,7 @@ export default function AuthChoice() {
           </div>
 
           <button onClick={() => navigate('/login?method=google')}
-            className="w-full bg-white text-on-background border border-surface-variant rounded-[2rem] py-4 font-bold text-base shadow-sm hover:bg-surface-container-lowest flex items-center justify-center gap-3 transition-colors">
+            className="w-full bg-surface text-on-background border border-surface-variant rounded-[2rem] py-4 font-bold text-base shadow-sm hover:bg-surface-container-lowest flex items-center justify-center gap-3 transition-colors">
             <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
             Continue with Google
           </button>

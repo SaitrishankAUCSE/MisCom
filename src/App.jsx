@@ -33,7 +33,7 @@ import { GlobalProvider, useGlobal } from './context/GlobalContext';
 // Protected Route — redirects unauthenticated users to /auth-choice
 function Protected({ children }) {
   const { isAuthenticated, isAuthLoading } = useGlobal();
-  if (isAuthLoading) return <div className="min-h-screen bg-white flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
+  if (isAuthLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
   if (!isAuthenticated) return <Navigate to="/auth-choice" replace />;
   return children;
 }
@@ -41,11 +41,10 @@ function Protected({ children }) {
 // Public Route — redirects authenticated users to /home (or onboarding if newly created)
 function PublicOnly({ children }) {
   const { isAuthenticated, isAuthLoading, user } = useGlobal();
-  if (isAuthLoading) return <div className="min-h-screen bg-white flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
+  if (isAuthLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
   
   if (isAuthenticated) {
-    // Redirect to onboarding ONLY if the account was created within the last 15 seconds
-    if (user && user.createdAt && (Date.now() - user.createdAt < 15000)) {
+    if (user && !user.onboardingCompleted) {
       return <Navigate to="/onboarding" replace />;
     }
     return <Navigate to="/home" replace />;

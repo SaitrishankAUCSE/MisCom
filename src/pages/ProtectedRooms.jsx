@@ -181,7 +181,7 @@ export default function ProtectedRooms() {
                 {searchResults.map((room, i) => (
                   <motion.div key={room.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                     whileTap={{ scale: 0.98 }} onClick={() => handleRoomTap(room)}
-                    className="relative bg-white rounded-[1.5rem] border border-on-background/5 overflow-hidden cursor-pointer hover:border-on-background/15 transition-all shadow-sm">
+                    className="relative bg-surface-container-lowest rounded-[1.5rem] border border-on-background/5 overflow-hidden cursor-pointer hover:border-on-background/15 transition-all shadow-sm">
                     <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${room.themeColor}, ${room.themeColor}88)` }} />
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-3">
@@ -233,7 +233,7 @@ export default function ProtectedRooms() {
           ) : rooms.map((room, i) => (
             <motion.div key={room.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
               whileTap={{ scale: 0.98 }} onClick={() => handleRoomTap(room)}
-              className="relative bg-white rounded-[1.5rem] border border-on-background/5 overflow-hidden cursor-pointer hover:border-on-background/15 transition-all shadow-sm">
+              className="relative bg-surface-container-lowest rounded-[1.5rem] border border-on-background/5 overflow-hidden cursor-pointer hover:border-on-background/15 transition-all shadow-sm">
               {/* Color accent bar */}
               <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${room.themeColor}, ${room.themeColor}88)` }} />
               <div className="p-5">
@@ -284,7 +284,7 @@ export default function ProtectedRooms() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowJoinModal(null)}>
             <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }}
-              onClick={e => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-[2rem] p-6 shadow-2xl">
+              onClick={e => e.stopPropagation()} className="w-full max-w-sm bg-surface-container-lowest rounded-[2rem] p-6 shadow-2xl">
               <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold" style={{ background: `linear-gradient(135deg, ${showJoinModal.themeColor}, ${showJoinModal.themeColor}99)` }}>
                 <span className="material-symbols-outlined text-3xl">lock</span>
               </div>
@@ -321,7 +321,7 @@ export default function ProtectedRooms() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowCreate(false)}>
             <motion.div initial={{ y: 500 }} animate={{ y: 0 }} exit={{ y: 500 }} transition={{ type: 'spring', damping: 25 }}
-              onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-[2rem] p-6 pb-10 max-h-[85vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md bg-surface-container-lowest rounded-t-[2rem] p-6 pb-10 max-h-[85vh] overflow-y-auto">
               <div className="w-12 h-1.5 bg-surface-variant rounded-full mx-auto mb-6" />
 
               {createStep === 1 && (
@@ -423,13 +423,13 @@ export default function ProtectedRooms() {
                     <div className="flex items-center justify-between py-3 border-t border-surface-variant/30">
                       <div><p className="font-label-bold text-sm">Anonymous Mode</p><p className="text-xs text-secondary">Hide real usernames</p></div>
                       <button onClick={() => setAnonymousMode(!anonymousMode)} className={`w-12 h-7 rounded-full transition-all ${anonymousMode ? 'bg-primary-container' : 'bg-surface-variant'}`}>
-                        <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${anonymousMode ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <div className={`w-5 h-5 bg-surface-container-lowest rounded-full shadow transition-transform ${anonymousMode ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
                     </div>
                     <div className="flex items-center justify-between py-3 border-t border-surface-variant/30">
                       <div><p className="font-label-bold text-sm">Ghost Join</p><p className="text-xs text-secondary">No join notifications</p></div>
                       <button onClick={() => setGhostJoin(!ghostJoin)} className={`w-12 h-7 rounded-full transition-all ${ghostJoin ? 'bg-primary-container' : 'bg-surface-variant'}`}>
-                        <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${ghostJoin ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <div className={`w-5 h-5 bg-surface-container-lowest rounded-full shadow transition-transform ${ghostJoin ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
                     </div>
                     <button onClick={handleCreate} disabled={!name.trim()}

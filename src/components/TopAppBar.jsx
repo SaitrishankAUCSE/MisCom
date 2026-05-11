@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
+import Avatar from './Avatar';
 import Logo from './Logo';
 
 export default function TopAppBar({ title = 'MisCom', showBack = false, greeting = '' }) {
@@ -38,16 +39,15 @@ export default function TopAppBar({ title = 'MisCom', showBack = false, greeting
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
           ) : (
-            <div className="relative cursor-pointer" onClick={() => navigate('/profile')}>
-              <div className="w-10 h-10 rounded-full bg-surface-variant border-2 border-primary-container p-0.5 flex items-center justify-center overflow-hidden">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt={user?.name} className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
-                )}
-              </div>
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-container rounded-full border-2 border-surface" />
-            </div>
+            <Avatar 
+              src={user?.avatar} 
+              alt={user?.name} 
+              size="md" 
+              border={true}
+              online={true}
+              showStatus={true}
+              onClick={() => navigate('/profile')}
+            />
           )}
           <div className="flex flex-col">
             {title === 'MisCom' ? (
@@ -144,7 +144,7 @@ export default function TopAppBar({ title = 'MisCom', showBack = false, greeting
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25 }}
               onClick={e => e.stopPropagation()}
-              className="absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl flex flex-col"
+              className="absolute right-0 top-0 h-full w-full max-w-sm bg-surface shadow-2xl flex flex-col"
             >
               <div className="flex items-center justify-between p-6 border-b border-surface-variant/20">
                 <h2 className="font-headline-md text-xl font-bold">Notifications</h2>

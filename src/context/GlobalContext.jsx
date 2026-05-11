@@ -18,6 +18,34 @@ export function GlobalProvider({ children }) {
 
   const [globalToast, setGlobalToast] = useState(null);
 
+  // ── Theme (dark/light) ──
+  const [theme, setThemeState] = useState(() => {
+    const savedTheme = localStorage.getItem('miscom_theme');
+    if (savedTheme) return savedTheme;
+    try {
+      const appearance = JSON.parse(localStorage.getItem('miscom_appearance') || '{}');
+      return appearance.theme || 'light';
+    } catch { return 'light'; }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('miscom_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setThemeState(prev => prev === 'dark' ? 'light' : 'dark');
+  }, []);
+
+  const setTheme = useCallback((t) => {
+    setThemeState(t);
+  }, []);
+
   // ── Init: restore session ──
   useEffect(() => {
     Backend.init();
@@ -183,6 +211,23 @@ export function GlobalProvider({ children }) {
     }
   };
 
+  const deleteAccount = async (password) => {
+    if (!user) return;
+    
+    // 1. Reauthenticate if using real Firebase
+    if (FirebaseSync.isReady()) {
+      await FirebaseSync.reauthenticate(password);
+      // 2. Call the irreversible wipe function
+      await FirebaseSync.deleteAccount();
+    }
+    
+    // 3. Cleanup local data
+    Backend.auth.deleteAccount(user.uid);
+    localStorage.clear(); // Nuclear option for client side
+    setUser(null);
+    window.location.href = '/login';
+  };
+
   const isAuthenticated = !!user;
 
   // ── Permissions ──
@@ -276,7 +321,7 @@ export function GlobalProvider({ children }) {
   return (
     <GlobalContext.Provider value={{
       user, isAuthLoading, isAuthenticated, pendingEmail,
-      signup, signupWithGoogle, verifyOtp, resendOtp, login, loginWithGoogle, logout, updateProfile,
+      signup, signupWithGoogle, verifyOtp, resendOtp, login, loginWithGoogle, logout, updateProfile, deleteAccount,
       permissions, requestMicrophone, requestContacts,
       chats, refreshChats, getMessages, sendMessage, markChatRead, deleteChat,
       createOrGetDM, getRegularChats, getIncomingMessageRequests, acceptMessageRequest, deleteMessageRequest,
@@ -284,7 +329,8 @@ export function GlobalProvider({ children }) {
       music, toggleMusic, skipTrack, joinMusicSession, addToQueue,
       notifications, unreadNotifCount, markNotificationsRead, markNotificationRead,
       getInsights, timeAgo: Backend.timeAgo, socialVersion,
-      globalToast, setGlobalToast
+      globalToast, setGlobalToast,
+      theme, toggleTheme, setTheme
     }}>
       {children}
     </GlobalContext.Provider>

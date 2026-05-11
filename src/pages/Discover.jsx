@@ -186,7 +186,7 @@ export default function Discover() {
     return (
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
         onClick={handleCardClick}
-        className={`flex items-center justify-between p-4 bg-white rounded-2xl border border-on-background/5 shadow-sm transition-colors ${u.uid === user.uid ? '' : 'cursor-pointer hover:bg-surface-container-lowest'}`}>
+        className={`flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-on-background/5 shadow-sm transition-colors ${u.uid === user.uid ? '' : 'cursor-pointer hover:bg-surface-container-lowest'}`}>
       <div className="flex items-center gap-3 min-w-0">
         <div className="relative shrink-0">
           <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant ring-2 ring-primary-container/20 ring-offset-1">
@@ -341,7 +341,7 @@ export default function Discover() {
                   <div className="flex flex-col gap-3">
                     {requests.map((req, i) => (
                       <motion.div key={req.id} initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }}
-                        className="p-4 bg-white rounded-2xl border border-on-background/5 shadow-sm">
+                        className="p-4 bg-surface-container-lowest rounded-2xl border border-on-background/5 shadow-sm">
                         <div className="flex items-center gap-3 mb-4">
                           <div className="w-14 h-14 rounded-full overflow-hidden bg-surface-variant ring-2 ring-primary-container/20 ring-offset-1">
                             {req.fromUser?.avatar ? <img src={req.fromUser.avatar} className="w-full h-full object-cover" /> : (
@@ -386,7 +386,7 @@ export default function Discover() {
                     {friends.map((f, i) => (
                       <motion.div key={f.uid} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
                         onClick={() => { const chatId = 'chat-' + [user.uid, f.uid].sort().join('-'); navigate(`/chat/${chatId}`); }}
-                        className="flex items-center justify-between p-4 bg-white rounded-2xl border border-on-background/5 shadow-sm cursor-pointer hover:border-primary-container/20 transition-all">
+                        className="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-on-background/5 shadow-sm cursor-pointer hover:border-primary-container/20 transition-all">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant ring-2 ring-green-400/30 ring-offset-1 shrink-0">
                             {f.avatar ? <img src={f.avatar} className="w-full h-full object-cover" /> : (

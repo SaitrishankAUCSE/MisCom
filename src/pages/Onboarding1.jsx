@@ -11,9 +11,9 @@ export default function Onboarding1() {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -30 }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-white min-h-screen flex flex-col items-center justify-center font-body-md text-on-background antialiased"
+      className="bg-background min-h-screen flex flex-col items-center justify-center font-body-md text-on-background antialiased"
     >
-      <main className="w-full max-w-md mx-auto min-h-screen flex flex-col relative overflow-x-hidden overflow-y-auto bg-white px-margin-mobile pb-margin-mobile pt-16">
+      <main className="w-full max-w-md mx-auto min-h-screen flex flex-col relative overflow-x-hidden overflow-y-auto bg-background px-margin-mobile pb-margin-mobile pt-16">
         {/* Header / Progress */}
         <header className="w-full flex justify-between items-center z-10 pt-4 pb-6">
           <button
@@ -58,7 +58,7 @@ export default function Onboarding1() {
             transition={{ delay: 0.5, duration: 0.8 }}
             className="relative w-full aspect-square max-w-sm mx-auto my-auto flex items-center justify-center"
           >
-            <div className="absolute inset-0 bg-gradient-to-tr from-surface-variant/30 to-white rounded-full filter blur-3xl opacity-50" />
+            <div className="absolute inset-0 bg-gradient-to-tr from-surface-variant/30 to-background rounded-full filter blur-3xl opacity-50" />
             <div className="relative z-10 w-full h-full flex items-center justify-center">
               {/* Central visual element */}
               <div className="w-[85%] h-[85%] bg-gradient-to-br from-primary-container/10 via-surface-variant/30 to-primary-fixed/20 rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-outline-variant/20 transform -rotate-2 flex items-center justify-center">
@@ -73,7 +73,7 @@ export default function Onboarding1() {
               <div className="absolute -right-4 top-1/4 w-16 h-16 rounded-xl bg-primary-container flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transform rotate-12">
                 <span className="material-symbols-outlined text-on-primary-container text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>music_note</span>
               </div>
-              <div className="absolute -left-2 bottom-1/4 w-12 h-12 rounded-full bg-white border-[2px] border-on-background flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transform -rotate-6">
+              <div className="absolute -left-2 bottom-1/4 w-12 h-12 rounded-full bg-surface border-[2px] border-on-background flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transform -rotate-6">
                 <span className="material-symbols-outlined text-primary-container text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
               </div>
             </div>

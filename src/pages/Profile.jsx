@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import TopAppBar from '../components/TopAppBar';
 import { useGlobal } from '../context/GlobalContext';
+import Avatar from '../components/Avatar';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -61,15 +62,14 @@ export default function Profile() {
         {/* Profile Card */}
         <section className="text-center space-y-4">
           <div className="relative inline-block">
-            <div className="w-24 h-24 rounded-full bg-surface-variant border-4 border-primary-container overflow-hidden mx-auto">
-              {user?.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-4xl text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
-                </div>
-              )}
-            </div>
+            <Avatar 
+              src={user?.avatar} 
+              alt={user?.name} 
+              size="xl" 
+              border={true}
+              online={true}
+              showStatus={true}
+            />
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowEditAura(true)}
@@ -117,10 +117,10 @@ export default function Profile() {
           </h2>
           <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide relative z-10">
             {[
-              { title: 'Early Adopter', icon: 'star', color: 'text-amber-500', bg: 'bg-amber-50' },
-              { title: 'Night Owl', icon: 'bedtime', color: 'text-indigo-500', bg: 'bg-indigo-50' },
-              { title: 'Social Butterfly', icon: 'diversity_3', color: 'text-emerald-500', bg: 'bg-emerald-50' },
-              { title: 'Vibe Master', icon: 'music_note', color: 'text-rose-500', bg: 'bg-rose-50' },
+              { title: 'Early Adopter', icon: 'star', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+              { title: 'Night Owl', icon: 'bedtime', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+              { title: 'Social Butterfly', icon: 'diversity_3', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+              { title: 'Vibe Master', icon: 'music_note', color: 'text-rose-500', bg: 'bg-rose-500/10' },
             ].map((badge, i) => (
               <motion.div key={i} whileHover={{ scale: 1.05 }} className="flex-shrink-0 w-24 flex flex-col items-center gap-2">
                 <div className={`w-16 h-16 rounded-full ${badge.bg} flex items-center justify-center shadow-inner`}>
@@ -192,7 +192,7 @@ export default function Profile() {
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end justify-center"
             onClick={() => setShowEditAura(false)}>
             <motion.div initial={{ y: 300 }} animate={{ y: 0 }} exit={{ y: 300 }} transition={{ type: 'spring', damping: 25 }}
-              onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-[2rem] p-6 pb-10">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md bg-surface-container-lowest rounded-t-[2rem] p-6 pb-10">
               <div className="w-12 h-1.5 bg-surface-variant rounded-full mx-auto mb-6" />
               <h2 className="font-headline-md text-headline-md mb-6">Set Your Aura</h2>
               <div className="grid grid-cols-2 gap-3">
@@ -215,7 +215,7 @@ export default function Profile() {
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center px-6"
             onClick={() => setShowLogoutConfirm(false)}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              onClick={e => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-[2rem] p-8 text-center shadow-2xl">
+              onClick={e => e.stopPropagation()} className="w-full max-w-sm bg-surface-container-lowest rounded-[2rem] p-8 text-center shadow-2xl">
               <span className="material-symbols-outlined text-error text-5xl mb-4 block">logout</span>
               <h2 className="font-headline-md text-xl font-bold mb-2">Log out?</h2>
               <p className="text-secondary text-sm mb-6">You'll need to sign in again to access your space.</p>

@@ -8,8 +8,9 @@ import FirebaseSync from '../lib/firebase';
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { signup, signupWithGoogle } = useGlobal();
+  const { signup, signupWithGoogle, updateProfile } = useGlobal();
 
+  const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,10 +69,15 @@ export default function Signup() {
   const handleEmailSignup = async (e) => {
     e.preventDefault();
     if (!isFormValid || isGooglePrefilled) return;
+    if (!name.trim()) { setError('Please enter your full name'); return; }
     setLoading(true);
     setError('');
     try {
-      await signup(username, email, password);
+      const u = await signup(username, email, password);
+      // Update display name immediately
+      if (u) {
+        updateProfile({ name: name.trim() });
+      }
       navigate('/onboarding');
     } catch (err) {
       setError(err.message);
@@ -83,10 +89,14 @@ export default function Signup() {
   const handleGoogleFinalize = async (e) => {
     e.preventDefault();
     if (!isFormValid || !isGooglePrefilled) return;
+    if (!name.trim()) { setError('Please enter your full name'); return; }
     setLoading(true);
     setError('');
     try {
-      await signupWithGoogle(username, email, password);
+      const u = await signupWithGoogle(username, email, password);
+      if (u) {
+        updateProfile({ name: name.trim() });
+      }
       navigate('/onboarding');
     } catch (err) {
       setError(err.message);
@@ -118,11 +128,12 @@ export default function Signup() {
 
       // Pre-fill the form with Google data
       setEmail(fbUser.email);
+      setName(fbUser.displayName || '');
       setEmailLocked(true);
       setIsGooglePrefilled(true);
       const suggestedUsername = fbUser.email.split('@')[0].replace(/[^a-z0-9_]/g, '').slice(0, 20);
       setUsername(suggestedUsername);
-      setSuccessMsg('Google verified! Now pick a username and create a password.');
+      setSuccessMsg('Google verified! Now pick a username and confirm your details.');
       setGoogleLoading(false);
 
       // Scroll to password field
@@ -138,7 +149,7 @@ export default function Signup() {
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-white min-h-screen flex flex-col relative overflow-x-hidden overflow-y-auto px-6 py-10 font-body-md text-on-background">
+      className="bg-background min-h-screen flex flex-col relative overflow-x-hidden overflow-y-auto px-6 py-10 font-body-md text-on-background">
       
       <div className="absolute top-0 left-0 w-[50vw] h-[50vw] bg-primary-container/8 rounded-full blur-[80px] -translate-y-1/3 -translate-x-1/4 z-0" />
 
@@ -183,7 +194,7 @@ export default function Signup() {
         {!isGooglePrefilled && (
           <>
             <button type="button" onClick={handleGoogleAuth} disabled={loading || googleLoading}
-              className="w-full bg-white text-on-background border border-surface-variant rounded-[2rem] py-4 font-bold text-base shadow-sm hover:bg-surface-container-lowest flex items-center justify-center gap-3 transition-colors disabled:opacity-50 mb-6">
+              className="w-full bg-surface text-on-background border border-surface-variant rounded-[2rem] py-4 font-bold text-base shadow-sm hover:bg-surface-container-lowest flex items-center justify-center gap-3 transition-colors disabled:opacity-50 mb-6">
               {googleLoading ? (
                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                   className="w-5 h-5 border-2 border-surface-variant border-t-primary-container rounded-full" />
@@ -204,13 +215,24 @@ export default function Signup() {
         )}
 
         <form onSubmit={isGooglePrefilled ? handleGoogleFinalize : handleEmailSignup} className="flex flex-col gap-4">
+          {/* Full Name */}
+          <div>
+            <label className="text-xs font-label-bold text-secondary ml-4 mb-1.5 block">Full Name</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-xl">person</span>
+              <input type="text" value={name} onChange={e => setName(e.target.value)}
+                placeholder="e.g. Alex River"
+                className="w-full bg-transparent border-2 border-surface-variant rounded-[1.25rem] pl-12 pr-4 py-4 outline-none focus:border-primary-container transition-colors" />
+            </div>
+          </div>
+
           {/* Username */}
           <div>
             <label className="text-xs font-label-bold text-secondary ml-4 mb-1.5 flex items-center gap-2">
               Username
-              {usernameStatus === 'available' && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-500 text-[10px] font-bold bg-green-50 px-2 py-0.5 rounded-full">✓ Available</motion.span>}
-              {usernameStatus === 'taken' && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-500 text-[10px] font-bold bg-red-50 px-2 py-0.5 rounded-full">✗ Username already exists</motion.span>}
-              {usernameStatus === 'invalid' && <span className="text-red-500 text-[10px] bg-red-50 px-2 py-0.5 rounded-full">Invalid username</span>}
+              {usernameStatus === 'available' && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-500 text-[10px] font-bold bg-green-500/10 px-2 py-0.5 rounded-full">✓ Available</motion.span>}
+              {usernameStatus === 'taken' && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-0.5 rounded-full">✗ Username already exists</motion.span>}
+              {usernameStatus === 'invalid' && <span className="text-red-500 text-[10px] bg-red-500/10 px-2 py-0.5 rounded-full">Invalid username</span>}
               {usernameStatus === 'checking' && <span className="text-secondary text-[10px]">Checking...</span>}
             </label>
             <div className="relative">
@@ -244,16 +266,16 @@ export default function Signup() {
           <div>
             <label className="text-xs font-label-bold text-secondary ml-4 mb-1.5 flex items-center gap-2">
               Email
-              {emailValid === true && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-500 text-[10px] font-bold bg-green-50 px-2 py-0.5 rounded-full">✓ Available</motion.span>}
-              {emailValid === false && email.length > 3 && <span className="text-red-500 text-[10px] bg-red-50 px-2 py-0.5 rounded-full">Already registered or invalid</span>}
-              {emailLocked && <span className="text-blue-500 text-[10px] bg-blue-50 px-2 py-0.5 rounded-full">🔒 Verified by Google</span>}
+              {emailValid === true && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-500 text-[10px] font-bold bg-green-500/10 px-2 py-0.5 rounded-full">✓ Available</motion.span>}
+              {emailValid === false && email.length > 3 && <span className="text-red-500 text-[10px] bg-red-500/10 px-2 py-0.5 rounded-full">Already registered or invalid</span>}
+              {emailLocked && <span className="text-blue-500 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded-full">🔒 Verified by Google</span>}
             </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-xl">mail</span>
               <input type="email" value={email} onChange={e => { if (!emailLocked) { setEmail(e.target.value); setError(''); } }}
                 placeholder="email@domain.com" readOnly={emailLocked}
                 className={`w-full bg-transparent border-2 rounded-[1.25rem] pl-12 pr-4 py-4 outline-none transition-colors ${
-                  emailLocked ? 'border-blue-300 bg-blue-50/30 cursor-not-allowed' :
+                  emailLocked ? 'border-blue-300 bg-blue-500/5 cursor-not-allowed' :
                   emailValid === true ? 'border-green-400' : emailValid === false && email.length > 3 ? 'border-red-400' : 'border-surface-variant focus:border-primary-container'
                 }`} />
             </div>
@@ -301,8 +323,8 @@ export default function Signup() {
             <label className="text-xs font-label-bold text-secondary ml-4 mb-1.5 flex items-center gap-2">
               Confirm Password
               {confirm && (passwordsMatch
-                ? <span className="text-green-500 text-[10px] bg-green-50 px-2 py-0.5 rounded-full">✓ Match</span>
-                : <span className="text-red-500 text-[10px] bg-red-50 px-2 py-0.5 rounded-full">✗ Doesn't match</span>
+                ? <span className="text-green-500 text-[10px] bg-green-500/10 px-2 py-0.5 rounded-full">✓ Match</span>
+                : <span className="text-red-500 text-[10px] bg-red-500/10 px-2 py-0.5 rounded-full">✗ Doesn't match</span>
               )}
             </label>
             <div className="relative">

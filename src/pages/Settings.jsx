@@ -6,7 +6,10 @@ import Backend from '../lib/backend';
 import FirebaseSync from '../lib/firebase';
 
 const Toggle = ({ on, onToggle }) => (
-  <button onClick={onToggle} className={`w-12 h-7 rounded-full p-1 transition-all duration-300 ${on ? 'bg-primary-container' : 'bg-surface-variant'}`}>
+  <button 
+    onClick={(e) => { e.stopPropagation(); onToggle(); }} 
+    className={`w-12 h-7 rounded-full p-1 transition-all duration-300 ${on ? 'bg-primary-container' : 'bg-surface-variant'}`}
+  >
     <motion.div animate={{ x: on ? 20 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}
       className={`w-5 h-5 rounded-full shadow-md ${on ? 'bg-white' : 'bg-white'}`} />
   </button>
@@ -18,7 +21,7 @@ const Section = ({ icon, title, children, danger }) => (
       {icon && <span className="material-symbols-outlined text-[14px] align-middle mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>}
       {title}
     </h3>
-    <div className="bg-white rounded-2xl border border-on-background/5 overflow-hidden divide-y divide-on-background/5 shadow-sm">
+    <div className="bg-surface-container-lowest rounded-2xl border border-on-background/5 overflow-hidden divide-y divide-on-background/5 shadow-sm">
       {children}
     </div>
   </section>
@@ -41,7 +44,7 @@ const Row = ({ icon, label, subtitle, value, onClick, toggle, toggleValue, onTog
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { user, logout, updateProfile, permissions, requestMicrophone, requestContacts } = useGlobal();
+  const { user, logout, updateProfile, deleteAccount, permissions, requestMicrophone, requestContacts, theme, toggleTheme } = useGlobal();
 
   const [showToast, setShowToast] = useState('');
   const [modal, setModal] = useState(null); // 'password' | 'delete' | 'logout' | 'theme'
@@ -82,29 +85,18 @@ export default function Settings() {
   const [delError, setDelError] = useState('');
   const [delStep, setDelStep] = useState(1);
 
-  const handleDeleteAccount = () => {
-    if (!delPassword) return setDelError('Enter your password to confirm');
+  const handleDeleteAccount = async () => {
     setDelError('');
     setDelStep(3); // Show loading
     
-    setTimeout(async () => {
-      try {
-        // First wipe from Firebase with a timeout to prevent hanging
-        if (FirebaseSync && FirebaseSync.isReady()) {
-          await Promise.race([
-            FirebaseSync.deleteAccount(),
-            new Promise(resolve => setTimeout(resolve, 3000)) // 3s timeout
-          ]);
-        }
-      } catch (err) {
-        console.warn('Firebase delete failed or timed out:', err);
-      }
-      
-      // Then wipe locally
-      localStorage.clear();
-      logout();
-      navigate('/auth-choice');
-    }, 1000);
+    try {
+      await deleteAccount(delPassword);
+      // Context's deleteAccount handles redirect to /login
+    } catch (err) {
+      console.error('Account deletion failed:', err);
+      setDelError(err.message || 'Deletion failed. Please check your password.');
+      setDelStep(2); // Go back to password step
+    }
   };
 
   const handleLogout = () => { logout(); navigate('/auth-choice'); };
@@ -114,7 +106,7 @@ export default function Settings() {
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-      className="bg-[#F5F5F7] min-h-screen font-body-md text-on-background pb-24">
+      className="bg-background min-h-screen font-body-md text-on-background pb-24">
 
       {/* Toast */}
       <AnimatePresence>
@@ -125,9 +117,9 @@ export default function Settings() {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#F5F5F7]/80 backdrop-blur-xl border-b border-on-background/5">
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-on-background/5">
         <div className="flex items-center justify-between px-5 h-16">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white transition-colors">
+          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-high transition-colors">
             <span className="material-symbols-outlined text-2xl">arrow_back</span>
           </button>
           <h1 className="font-display text-lg font-bold">Settings</h1>
@@ -138,7 +130,7 @@ export default function Settings() {
       {/* Profile Card */}
       <div className="px-5 py-6">
         <motion.div whileTap={{ scale: 0.98 }} onClick={() => navigate('/profile-setup')}
-          className="bg-white rounded-3xl p-5 flex items-center gap-4 shadow-sm border border-on-background/5 cursor-pointer hover:shadow-md transition-shadow">
+          className="bg-surface-container-lowest rounded-3xl p-5 flex items-center gap-4 shadow-sm border border-on-background/5 cursor-pointer hover:shadow-md transition-shadow">
           <div className="relative">
             <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary-container">
               {user?.avatar ? <img src={user.avatar} alt="" className="w-full h-full object-cover" /> :
@@ -198,7 +190,7 @@ export default function Settings() {
 
         {/* Appearance */}
         <Section icon="palette" title="Appearance">
-          <Row icon="dark_mode" label="Dark Mode" subtitle="Coming soon" toggle toggleValue={toggles.darkMode} onToggle={() => { toggle('darkMode'); toast('Dark mode coming soon! 🌙'); }} />
+          <Row icon={theme === 'dark' ? 'dark_mode' : 'light_mode'} label="Dark Mode" subtitle={theme === 'dark' ? "Nocturnal Crimson active" : "Standard light mode"} toggle toggleValue={theme === 'dark'} onToggle={toggleTheme} />
           <Row icon="bedtime" label="Late Night Mode" subtitle="Warmer tones after 10PM" toggle toggleValue={toggles.lateNight} onToggle={() => toggle('lateNight')} />
           <Row icon="format_size" label="Text Size" value="Default" onClick={() => toast('Text size options coming soon')} />
           <Row icon="color_lens" label="Accent Color" onClick={() => toast('Theme customization coming soon 🎨')} />
@@ -283,7 +275,7 @@ export default function Settings() {
             {/* Change Password */}
             {modal === 'password' && (
               <motion.div initial={{ y: 300 }} animate={{ y: 0 }} exit={{ y: 300 }} transition={{ type: 'spring', damping: 25 }}
-                onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-[2rem] sm:rounded-[2rem] p-6 pb-10">
+                onClick={e => e.stopPropagation()} className="w-full max-w-md bg-surface-container-lowest rounded-t-[2rem] sm:rounded-[2rem] p-6 pb-10">
                 <div className="w-12 h-1.5 bg-surface-variant rounded-full mx-auto mb-6" />
                 {pwSuccess ? (
                   <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} className="text-center py-8">
@@ -327,7 +319,7 @@ export default function Settings() {
             {/* Logout */}
             {modal === 'logout' && (
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-                onClick={e => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-[2rem] p-8 text-center shadow-2xl mx-6">
+                onClick={e => e.stopPropagation()} className="w-full max-w-sm bg-surface-container-lowest rounded-[2rem] p-8 text-center shadow-2xl mx-6">
                 <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="material-symbols-outlined text-red-500 text-3xl">logout</span>
                 </div>
@@ -343,7 +335,7 @@ export default function Settings() {
             {/* Delete Account */}
             {modal === 'delete' && (
               <motion.div initial={{ y: 300 }} animate={{ y: 0 }} exit={{ y: 300 }} transition={{ type: 'spring', damping: 25 }}
-                onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-[2rem] sm:rounded-[2rem] p-6 pb-10">
+                onClick={e => e.stopPropagation()} className="w-full max-w-md bg-surface-container-lowest rounded-t-[2rem] sm:rounded-[2rem] p-6 pb-10">
                 <div className="w-12 h-1.5 bg-surface-variant rounded-full mx-auto mb-6" />
                 {delStep === 1 ? (
                   <div className="text-center">
@@ -364,13 +356,22 @@ export default function Settings() {
                 ) : delStep === 2 ? (
                   <div>
                     <h2 className="font-headline-md text-lg font-bold mb-1">Confirm Deletion</h2>
-                    <p className="text-secondary text-sm mb-6">Enter your password to permanently delete your account.</p>
+                    {user?.provider === 'google' ? (
+                      <p className="text-secondary text-sm mb-6">Since you signed in with Google, we need to verify your identity with a Google popup.</p>
+                    ) : (
+                      <p className="text-secondary text-sm mb-6">Enter your password to permanently delete your account.</p>
+                    )}
+                    
                     {delError && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl mb-4 font-label-bold">{delError}</p>}
-                    <input type="password" placeholder="Enter your password" value={delPassword} onChange={e => { setDelPassword(e.target.value); setDelError(''); }}
-                      className="w-full border-2 border-red-200 rounded-2xl px-4 py-4 outline-none focus:border-red-400 transition-colors mb-4" />
-                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleDeleteAccount} disabled={!delPassword}
+                    
+                    {user?.provider !== 'google' && (
+                      <input type="password" placeholder="Enter your password" value={delPassword} onChange={e => { setDelPassword(e.target.value); setDelError(''); }}
+                        className="w-full border-2 border-red-200 rounded-2xl px-4 py-4 outline-none focus:border-red-400 transition-colors mb-4" />
+                    )}
+
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleDeleteAccount} disabled={user?.provider !== 'google' && !delPassword}
                       className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full py-4 font-bold shadow-lg disabled:opacity-50">
-                      Permanently Delete Account
+                      {user?.provider === 'google' ? 'Verify with Google & Wipe Account' : 'Permanently Delete Account'}
                     </motion.button>
                     <button onClick={() => setDelStep(1)} className="w-full mt-3 text-secondary text-sm font-label-bold hover:underline">Go back</button>
                   </div>
@@ -387,7 +388,7 @@ export default function Settings() {
             {modal === 'permissions' && (
               <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                 onClick={e => e.stopPropagation()} className="w-full h-[90vh] bg-[#F5F5F7] rounded-t-[2rem] flex flex-col overflow-hidden">
-                <div className="flex-shrink-0 pt-4 pb-2 bg-white flex flex-col items-center border-b border-on-background/5">
+                <div className="flex-shrink-0 pt-4 pb-2 bg-background flex flex-col items-center border-b border-on-background/5">
                   <div className="w-12 h-1.5 bg-surface-variant rounded-full mb-4" />
                   <div className="flex w-full items-center px-4 mb-2">
                     <h2 className="font-headline-md text-xl font-bold flex-1 text-center">App Permissions</h2>

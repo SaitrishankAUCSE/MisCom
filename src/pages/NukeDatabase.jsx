@@ -55,7 +55,7 @@ export default function NukeDatabase() {
       </div>
 
       <button onClick={() => window.location.href = '/'} 
-        className="bg-white text-black px-8 py-3 rounded-full font-bold hover:bg-gray-200 transition-colors">
+        className="bg-primary-container text-white px-8 py-3 rounded-full font-bold hover:bg-primary-fixed-dim transition-colors">
         Return to App
       </button>
     </div>

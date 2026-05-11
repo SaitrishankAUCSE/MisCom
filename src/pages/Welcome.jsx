@@ -14,7 +14,7 @@ export default function Welcome() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}
-      className="bg-white text-on-background min-h-screen flex flex-col relative overflow-hidden font-body-md">
+      className="bg-background text-on-background min-h-screen flex flex-col relative overflow-hidden font-body-md">
       {/* Background Glows */}
       <div className="absolute -top-[20%] -left-[10%] w-[80vw] h-[80vw] glow-red rounded-full pointer-events-none z-0 mix-blend-multiply" />
       <div className="absolute top-[40%] -right-[20%] w-[90vw] h-[90vw] bg-gradient-to-tr from-transparent via-primary-container/5 to-transparent blur-[80px] rounded-full pointer-events-none z-0" />
@@ -37,11 +37,11 @@ export default function Welcome() {
           <div className="absolute top-1/4 -left-8 w-32 h-48 rounded-[2rem] bg-gradient-to-br from-white/60 to-white/10 border border-white/40 backdrop-blur-xl transform -rotate-[15deg] scale-90 opacity-60 shadow-2xl z-0" />
           <div className="absolute bottom-1/4 -right-8 w-40 h-56 rounded-[2.5rem] bg-gradient-to-tl from-primary-container/10 to-transparent border border-white/50 backdrop-blur-2xl transform rotate-[10deg] scale-90 opacity-70 z-0" />
           <div className="relative w-72 aspect-[0.48] glass-panel rounded-[3rem] p-3 z-20 flex flex-col items-center justify-center">
-            <div className="w-full h-full rounded-[2.5rem] overflow-hidden bg-white relative shadow-inner border border-gray-100/50">
+            <div className="w-full h-full rounded-[2.5rem] overflow-hidden bg-surface relative shadow-inner border border-surface-variant/30">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[40%] h-6 bg-black rounded-b-[1.2rem] z-30 flex justify-center items-center">
                 <div className="w-12 h-1.5 bg-gray-800 rounded-full mt-1" />
               </div>
-              <div className="w-full h-full bg-gradient-to-b from-primary-container/5 via-white to-surface-variant/20 flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-b from-primary-container/5 via-surface to-surface-variant/20 flex items-center justify-center">
                 <motion.span
                   animate={{ y: [0, -8, 0] }}
                   transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}

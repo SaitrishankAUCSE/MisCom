@@ -1,21 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import Backend from '../lib/backend';
+import { useGlobal } from '../context/GlobalContext';
 
 const THEMES = [
-  { id: 'light', label: 'Light', icon: 'light_mode', preview: 'bg-white text-black' },
-  { id: 'dark', label: 'Dark', icon: 'dark_mode', preview: 'bg-[#1a1a2e] text-white' },
-  { id: 'system', label: 'System', icon: 'settings_suggest', preview: 'bg-gradient-to-b from-white to-[#1a1a2e] text-gray-600' },
-];
-
-const ACCENT_COLORS = [
-  { id: 'rose', label: 'Rose', color: '#e11d48', css: '225 29 72' },
-  { id: 'violet', label: 'Violet', color: '#7c3aed', css: '124 58 237' },
-  { id: 'blue', label: 'Ocean', color: '#2563eb', css: '37 99 235' },
-  { id: 'emerald', label: 'Emerald', color: '#059669', css: '5 150 105' },
-  { id: 'amber', label: 'Amber', color: '#d97706', css: '217 119 6' },
-  { id: 'pink', label: 'Pink', color: '#ec4899', css: '236 72 153' },
+  { id: 'light', label: 'Light', icon: 'light_mode', desc: 'Clean & bright' },
+  { id: 'dark', label: 'Dark', icon: 'dark_mode', desc: 'Nocturnal Crimson' },
+  { id: 'system', label: 'System', icon: 'settings_suggest', desc: 'Match device' },
 ];
 
 const FONT_SIZES = [
@@ -36,22 +27,13 @@ function getAppearance() {
 }
 function saveAppearance(data) {
   localStorage.setItem('miscom_appearance', JSON.stringify(data));
-  applyTheme(data);
+  applyExtras(data);
 }
 
-export function applyTheme(cfg) {
+// Apply non-theme extras (font size, chat bubble, reduce motion)
+export function applyExtras(cfg) {
   if (!cfg) cfg = getAppearance();
   const root = document.documentElement;
-
-  // Dark mode
-  const theme = cfg.theme || 'light';
-  let isDark = theme === 'dark';
-  if (theme === 'system') isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  root.classList.toggle('dark', isDark);
-
-  // Accent color
-  const accent = ACCENT_COLORS.find(a => a.id === cfg.accent);
-  if (accent) root.style.setProperty('--accent-rgb', accent.css);
 
   // Font size
   const fs = FONT_SIZES.find(f => f.id === cfg.fontSize);
@@ -65,11 +47,25 @@ export function applyTheme(cfg) {
   root.classList.toggle('reduce-motion', !!cfg.reduceMotion);
 }
 
+// Legacy export for backward compatibility
+export function applyTheme(cfg) {
+  if (!cfg) cfg = getAppearance();
+  const root = document.documentElement;
+
+  const theme = cfg.theme || 'light';
+  let isDark = theme === 'dark';
+  if (theme === 'system') isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  root.classList.toggle('dark', isDark);
+  
+  applyExtras(cfg);
+}
+
 export default function Appearance() {
   const navigate = useNavigate();
+  const { theme, setTheme } = useGlobal();
   const [cfg, setCfg] = useState(getAppearance);
 
-  useEffect(() => { applyTheme(cfg); }, [cfg]);
+  useEffect(() => { applyExtras(cfg); }, [cfg]);
 
   const update = (key, val) => {
     const next = { ...cfg, [key]: val };
@@ -77,12 +73,22 @@ export default function Appearance() {
     saveAppearance(next);
   };
 
+  const handleThemeChange = (themeId) => {
+    update('theme', themeId);
+    if (themeId === 'system') {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setTheme(isDark ? 'dark' : 'light');
+    } else {
+      setTheme(themeId);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
       className="bg-background text-on-background font-body-md min-h-screen pb-24">
       {/* Header */}
-      <header className="fixed top-0 left-0 w-full z-50 flex items-center gap-3 px-4 h-16 bg-surface/80 backdrop-blur-xl border-b border-surface-variant/10">
-        <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center">
+      <header className="fixed top-0 left-0 w-full z-50 flex items-center gap-3 px-4 h-16 bg-background/80 backdrop-blur-xl border-b border-on-background/5">
+        <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <h1 className="font-headline-md text-lg font-bold">Appearance</h1>
@@ -93,33 +99,46 @@ export default function Appearance() {
         <section className="mb-8">
           <h2 className="font-label-bold text-xs text-secondary uppercase tracking-wider mb-3">Theme</h2>
           <div className="grid grid-cols-3 gap-3">
-            {THEMES.map(t => (
-              <motion.button key={t.id} whileTap={{ scale: 0.95 }} onClick={() => update('theme', t.id)}
-                className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
-                  (cfg.theme || 'light') === t.id ? 'border-primary-container bg-primary-container/5 shadow-lg' : 'border-transparent bg-surface-container-low'}`}>
-                <div className={`w-10 h-10 rounded-full ${t.preview} flex items-center justify-center shadow-inner`}>
-                  <span className="material-symbols-outlined text-lg">{t.icon}</span>
-                </div>
-                <span className="text-xs font-label-bold">{t.label}</span>
-              </motion.button>
-            ))}
+            {THEMES.map(t => {
+              const isActive = (cfg.theme || 'light') === t.id;
+              return (
+                <motion.button key={t.id} whileTap={{ scale: 0.95 }} onClick={() => handleThemeChange(t.id)}
+                  className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    isActive ? 'border-primary-container bg-primary-container/10 shadow-lg' : 'border-transparent bg-surface-container-low hover:bg-surface-container'}`}>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    isActive ? 'bg-primary-container text-white shadow-[0_0_20px_rgba(225,29,72,0.3)]' : 'bg-surface-variant text-on-surface-variant'}`}>
+                    <span className="material-symbols-outlined text-xl">{t.icon}</span>
+                  </div>
+                  <span className={`text-xs font-label-bold ${isActive ? 'text-primary-container' : 'text-on-surface'}`}>{t.label}</span>
+                  <span className="text-[10px] text-secondary">{t.desc}</span>
+                </motion.button>
+              );
+            })}
           </div>
         </section>
 
-        {/* ── Accent Color ── */}
+        {/* ── Live Preview ── */}
         <section className="mb-8">
-          <h2 className="font-label-bold text-xs text-secondary uppercase tracking-wider mb-3">Accent Color</h2>
-          <div className="flex gap-3 flex-wrap">
-            {ACCENT_COLORS.map(a => (
-              <motion.button key={a.id} whileTap={{ scale: 0.9 }} onClick={() => update('accent', a.id)}
-                className={`w-12 h-12 rounded-full border-4 transition-all ${
-                  (cfg.accent || 'rose') === a.id ? 'border-on-background scale-110 shadow-lg' : 'border-transparent'}`}
-                style={{ backgroundColor: a.color }}>
-                {(cfg.accent || 'rose') === a.id && <span className="material-symbols-outlined text-white text-sm">check</span>}
-              </motion.button>
-            ))}
+          <h2 className="font-label-bold text-xs text-secondary uppercase tracking-wider mb-3">Preview</h2>
+          <div className="p-4 bg-surface-container-low rounded-2xl border border-on-background/5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
+                <span className="material-symbols-outlined text-white text-lg">person</span>
+              </div>
+              <div>
+                <p className="font-label-bold text-sm text-on-surface">Alex ✨</p>
+                <p className="text-[11px] text-secondary">@alexvibes</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="self-start bg-surface-container rounded-2xl rounded-bl-md px-3 py-2 max-w-[70%]">
+                <p className="text-[13px] text-on-surface">Hey! Love this theme 🔥</p>
+              </div>
+              <div className="self-end bg-primary-container text-white rounded-2xl rounded-br-md px-3 py-2 max-w-[70%]">
+                <p className="text-[13px]">Right? The crimson vibes hit different ✨</p>
+              </div>
+            </div>
           </div>
-          <p className="text-[10px] text-secondary mt-2">Changes buttons, links, and highlights throughout the app.</p>
         </section>
 
         {/* ── Font Size ── */}
@@ -161,7 +180,7 @@ export default function Appearance() {
               </div>
               <button onClick={() => update('reduceMotion', !cfg.reduceMotion)}
                 className={`w-12 h-7 rounded-full transition-all relative ${cfg.reduceMotion ? 'bg-primary-container' : 'bg-surface-variant'}`}>
-                <div className={`w-5 h-5 bg-white rounded-full absolute top-1 shadow transition-all ${cfg.reduceMotion ? 'left-6' : 'left-1'}`} />
+                <div className={`w-5 h-5 bg-surface-container-lowest rounded-full absolute top-1 shadow transition-all ${cfg.reduceMotion ? 'left-6' : 'left-1'}`} />
               </button>
             </div>
             <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl">
@@ -171,14 +190,19 @@ export default function Appearance() {
               </div>
               <button onClick={() => update('compact', !cfg.compact)}
                 className={`w-12 h-7 rounded-full transition-all relative ${cfg.compact ? 'bg-primary-container' : 'bg-surface-variant'}`}>
-                <div className={`w-5 h-5 bg-white rounded-full absolute top-1 shadow transition-all ${cfg.compact ? 'left-6' : 'left-1'}`} />
+                <div className={`w-5 h-5 bg-surface-container-lowest rounded-full absolute top-1 shadow transition-all ${cfg.compact ? 'left-6' : 'left-1'}`} />
               </button>
             </div>
           </div>
         </section>
 
         {/* ── Reset ── */}
-        <button onClick={() => { const def = { theme: 'light', accent: 'rose', fontSize: 'default', chatBubble: 'rounded' }; setCfg(def); saveAppearance(def); }}
+        <button onClick={() => { 
+          const def = { theme: 'light', fontSize: 'default', chatBubble: 'rounded' }; 
+          setCfg(def); 
+          saveAppearance(def); 
+          setTheme('light'); 
+        }}
           className="w-full py-3 bg-surface-container-low text-secondary rounded-2xl text-sm font-label-bold mb-4">
           Reset to Default
         </button>

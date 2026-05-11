@@ -69,7 +69,7 @@ export default function Splash() {
         transition={{ delay: 1.5 }}
       >
         <motion.div
-          className="h-full bg-white rounded-full"
+          className="h-full bg-surface-container-lowest rounded-full"
           initial={{ width: '0%' }}
           animate={{ width: '100%' }}
           transition={{ delay: 1.5, duration: 1.3, ease: 'easeInOut' }}

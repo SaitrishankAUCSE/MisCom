@@ -37,7 +37,7 @@ export default function VibeRooms() {
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
-      className="font-body-md text-on-surface antialiased bg-white min-h-screen flex flex-col relative pb-24">
+      className="font-body-md text-on-surface antialiased bg-background min-h-screen flex flex-col relative pb-24">
       <TopAppBar />
 
       {/* Toast */}
@@ -152,7 +152,7 @@ export default function VibeRooms() {
               exit={{ y: 300 }}
               transition={{ type: 'spring', damping: 25 }}
               onClick={e => e.stopPropagation()}
-              className="w-full max-w-md bg-white rounded-t-[2rem] p-6 pb-10"
+              className="w-full max-w-md bg-surface-container-lowest rounded-t-[2rem] p-6 pb-10"
             >
               <div className="w-12 h-1.5 bg-surface-variant rounded-full mx-auto mb-6" />
               <h2 className="font-headline-md text-headline-md mb-6">Create a Vibe Room</h2>
@@ -163,14 +163,14 @@ export default function VibeRooms() {
                   value={newRoomTitle}
                   onChange={e => setNewRoomTitle(e.target.value)}
                   placeholder="Room name..."
-                  className="w-full border-2 border-surface-variant rounded-[1.25rem] px-4 py-4 outline-none focus:border-primary-container transition-colors"
+                  className="w-full border-2 border-surface-variant bg-surface-container-low text-on-background rounded-[1.25rem] px-4 py-4 outline-none focus:border-primary-container transition-colors"
                 />
                 <textarea
                   value={newRoomDesc}
                   onChange={e => setNewRoomDesc(e.target.value)}
                   placeholder="Description..."
                   rows={3}
-                  className="w-full border-2 border-surface-variant rounded-[1.25rem] px-4 py-4 outline-none focus:border-primary-container transition-colors resize-none"
+                  className="w-full border-2 border-surface-variant bg-surface-container-low text-on-background rounded-[1.25rem] px-4 py-4 outline-none focus:border-primary-container transition-colors resize-none"
                 />
                 <div className="flex gap-3">
                   {['live', 'quiet'].map(type => (

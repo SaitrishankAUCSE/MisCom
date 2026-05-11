@@ -9,7 +9,10 @@ import {
   onAuthStateChanged,
   sendEmailVerification,
   updateProfile,
-  deleteUser
+  deleteUser,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  GoogleAuthProvider as GoogleAuth
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -26,6 +29,7 @@ import {
   onSnapshot,
   deleteDoc
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyALsXuYdXkuOAMHgaM6Ap8M5HW3nmZwbzE",
@@ -45,6 +49,7 @@ try {
   auth = getAuth(app);
   db = getFirestore(app);
   googleProvider = new GoogleAuthProvider();
+  const functions = getFunctions(app);
   // Test if Firebase is configured with real credentials
   firebaseReady = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'dummy_api_key';
 } catch (err) {
@@ -234,16 +239,37 @@ const FirebaseSync = {
   async deleteAccount() {
     if (!firebaseReady || !auth || !auth.currentUser) return;
     try {
-      const uid = auth.currentUser.uid;
-      // Delete user from Firestore
-      if (db) {
-        await deleteDoc(doc(db, 'users', uid));
-        await deleteDoc(doc(db, 'friends', uid));
-      }
-      // Delete from Firebase Auth
-      await deleteUser(auth.currentUser);
+      const functions = getFunctions(app);
+      const wipeFunc = httpsCallable(functions, 'deleteUserAccount');
+      const result = await wipeFunc();
+      return result.data;
     } catch (e) {
-      console.error("Error deleting Firebase account:", e);
+      console.error("Error wiping Firebase account:", e);
+      throw e;
+    }
+  },
+
+  /**
+   * Reauthenticate user before sensitive operations
+   */
+  async reauthenticate(password) {
+    if (!auth?.currentUser) return false;
+    try {
+      const user = auth.currentUser;
+      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+      
+      if (isGoogle) {
+        const provider = new GoogleAuth();
+        await signInWithPopup(auth, provider);
+        return true;
+      } else {
+        const credential = EmailAuthProvider.credential(user.email, password);
+        await reauthenticateWithCredential(user, credential);
+        return true;
+      }
+    } catch (err) {
+      console.error('Reauthentication failed:', err);
+      throw err;
     }
   },
 

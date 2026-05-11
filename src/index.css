@@ -97,26 +97,56 @@
   --text-display--font-weight: 800;
 }
 
-/* ═══ DARK MODE ═══ */
+/* ═══ DARK MODE — Nocturnal Crimson ═══ */
 html.dark {
-  --color-background: #0f0f1a;
-  --color-surface: #0f0f1a;
-  --color-surface-bright: #1a1a2e;
-  --color-surface-dim: #0a0a14;
-  --color-surface-container: #1e1e32;
-  --color-surface-container-low: #16162a;
-  --color-surface-container-high: #252540;
-  --color-surface-container-highest: #2e2e4a;
-  --color-surface-container-lowest: #0a0a14;
-  --color-surface-variant: #2a2a44;
-  --color-on-background: #e8e8f0;
-  --color-on-surface: #e8e8f0;
-  --color-on-surface-variant: #a0a0b8;
-  --color-secondary: #9898a8;
-  --color-outline: #6a5050;
-  --color-outline-variant: #4a3838;
-  --color-inverse-surface: #e8e8f0;
-  --color-inverse-on-surface: #1a1a2e;
+  --color-background: #131313;
+  --color-surface: #131313;
+  --color-surface-bright: #3a3939;
+  --color-surface-dim: #131313;
+  --color-surface-container: #201f1f;
+  --color-surface-container-low: #1c1b1b;
+  --color-surface-container-high: #2a2a2a;
+  --color-surface-container-highest: #353534;
+  --color-surface-container-lowest: #0e0e0e;
+  --color-surface-variant: #353534;
+  --color-on-background: #e5e2e1;
+  --color-on-surface: #e5e2e1;
+  --color-on-surface-variant: #e5bdbe;
+  --color-secondary: #c8c6c5;
+  --color-on-secondary: #313030;
+  --color-secondary-container: #474746;
+  --color-on-secondary-container: #b7b5b4;
+  --color-tertiary: #c8c6c9;
+  --color-tertiary-container: #747377;
+  --color-on-tertiary-container: #fdfafe;
+  --color-primary: #ffb3b6;
+  --color-on-primary: #68001a;
+  --color-primary-fixed: #ffdada;
+  --color-primary-fixed-dim: #ffb3b6;
+  --color-surface-tint: #ffb3b6;
+  --color-outline: #ac8889;
+  --color-outline-variant: #5c3f40;
+  --color-inverse-surface: #e5e2e1;
+  --color-inverse-on-surface: #313030;
+  --color-inverse-primary: #be0037;
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+}
+
+/* Dark mode glass overrides */
+html.dark .glass-panel {
+  background: rgba(26, 26, 26, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.4), 0 0 20px rgba(225, 29, 72, 0.1);
+}
+html.dark .glass-card {
+  background: rgba(26, 26, 26, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* ═══ Reduce Motion ═══ */
@@ -305,4 +335,12 @@ body {
   font-family: 'Be Vietnam Pro', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-background);
+  color: var(--color-on-background);
+}
+
+/* Ensure form elements respect dark mode */
+input, textarea, select, button {
+  color: inherit;
+  font-family: inherit;
 }

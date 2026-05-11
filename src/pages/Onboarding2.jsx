@@ -11,7 +11,7 @@ export default function Onboarding2() {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -30 }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-white min-h-screen flex flex-col items-center justify-center relative overflow-x-hidden overflow-y-auto font-body-md text-body-md text-on-surface"
+      className="bg-background min-h-screen flex flex-col items-center justify-center relative overflow-x-hidden overflow-y-auto font-body-md text-body-md text-on-surface"
     >
       {/* Decorative blurs */}
       <div className="absolute top-10 left-10 w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-primary-fixed-dim/20 blur-2xl z-0" />
@@ -46,7 +46,7 @@ export default function Onboarding2() {
           className="relative w-full flex-1 flex items-center justify-center my-8"
         >
           {/* Floating Elements */}
-          <div className="absolute top-1/4 -left-4 w-12 h-12 bg-white rounded-full border-2 border-on-background shadow-[4px_4px_0px_0px_rgba(225,29,72,1)] flex items-center justify-center rotate-[-15deg]">
+          <div className="absolute top-1/4 -left-4 w-12 h-12 bg-surface-container-lowest rounded-full border-2 border-on-background shadow-[4px_4px_0px_0px_rgba(225,29,72,1)] flex items-center justify-center rotate-[-15deg]">
             <span className="material-symbols-outlined filled text-primary-container text-2xl">favorite</span>
           </div>
           <div className="absolute bottom-1/4 -right-2 w-14 h-14 bg-primary-container rounded-full shadow-[4px_4px_0px_0px_rgba(27,27,27,1)] flex items-center justify-center rotate-[10deg]">
@@ -57,7 +57,7 @@ export default function Onboarding2() {
           <div className="w-64 sm:w-72 relative z-10 filter drop-shadow-2xl">
             <div className="relative w-full aspect-[0.5] rounded-[2rem] overflow-hidden border-4 border-on-background bg-surface-bright shadow-[8px_8px_0px_0px_rgba(27,27,27,1)]">
               {/* Mock chat interface */}
-              <div className="w-full h-full bg-white flex flex-col p-4">
+              <div className="w-full h-full bg-background flex flex-col p-4">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-8 h-8 rounded-full bg-primary-container" />
                   <div>
@@ -88,10 +88,10 @@ export default function Onboarding2() {
           </div>
 
           {/* More floating elements */}
-          <div className="absolute top-1/2 left-4 w-10 h-10 bg-white rounded-full border-2 border-on-background flex items-center justify-center z-20 shadow-[2px_2px_0px_0px_rgba(27,27,27,1)]">
+          <div className="absolute top-1/2 left-4 w-10 h-10 bg-surface-container-lowest rounded-full border-2 border-on-background flex items-center justify-center z-20 shadow-[2px_2px_0px_0px_rgba(27,27,27,1)]">
             <span className="material-symbols-outlined text-on-background text-xl">chat_bubble</span>
           </div>
-          <div className="absolute top-1/3 right-4 w-8 h-8 bg-white rounded-full border border-on-background flex items-center justify-center z-20 shadow-[2px_2px_0px_0px_rgba(225,29,72,1)]">
+          <div className="absolute top-1/3 right-4 w-8 h-8 bg-surface-container-lowest rounded-full border border-on-background flex items-center justify-center z-20 shadow-[2px_2px_0px_0px_rgba(225,29,72,1)]">
             <span className="material-symbols-outlined text-primary-container text-lg">auto_awesome</span>
           </div>
         </motion.div>

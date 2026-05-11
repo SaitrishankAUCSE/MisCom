@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
-import Backend from '../lib/backend';
+import Backend, { AVATARS } from '../lib/backend';
 import FirebaseSync from '../lib/firebase';
 import Logo from '../components/Logo';
 
@@ -32,18 +32,37 @@ const BIOS = [
   'Making memories 📸', 'Living my best life 🔥', 'Main character energy ⚡',
 ];
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 export default function PostSignupOnboarding() {
   const navigate = useNavigate();
   const { user, updateProfile } = useGlobal();
   const [step, setStep] = useState(0);
+  
+  // Identity state
+  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [username, setUsername] = useState(user?.username || '');
+  const [usernameStatus, setUsernameStatus] = useState('idle');
+  
   const [bio, setBio] = useState('');
   const [aura, setAura] = useState('');
   const [interests, setInterests] = useState([]);
   const [genres, setGenres] = useState([]);
   const [avatar, setAvatar] = useState(user?.avatar || '');
   const fileRef = useRef(null);
+
+  // Username validation (Instagram style)
+  React.useEffect(() => {
+    if (step !== 1) return;
+    if (username === user?.username) { setUsernameStatus('available'); return; }
+    if (username.length < 3) { setUsernameStatus('idle'); return; }
+    
+    setUsernameStatus('checking');
+    const timer = setTimeout(() => {
+      setUsernameStatus(Backend.auth.checkUsername(username));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [username, step, user?.username]);
 
   const next = () => step < TOTAL_STEPS - 1 ? setStep(s => s + 1) : finish();
   const back = () => step > 0 && setStep(s => s - 1);
@@ -61,6 +80,8 @@ export default function PostSignupOnboarding() {
   const finish = async () => {
     const selectedAura = AURAS.find(a => a.id === aura);
     const updates = {
+      name: displayName || user?.name || user?.username,
+      username: username || user?.username,
       bio, aura: selectedAura ? `${selectedAura.emoji} ${selectedAura.label}` : user?.aura || '',
       interests, musicGenres: genres, onboardingCompleted: true,
     };
@@ -91,7 +112,7 @@ export default function PostSignupOnboarding() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="bg-white min-h-screen flex flex-col relative overflow-hidden font-body-md text-on-background">
+      className="bg-background min-h-screen flex flex-col relative overflow-hidden font-body-md text-on-background">
 
       {/* Ambient blurs */}
       <div className="absolute top-0 right-0 w-[60vw] h-[60vw] bg-primary-container/8 rounded-full blur-[100px] -translate-y-1/3 translate-x-1/4 z-0" />
@@ -139,15 +160,62 @@ export default function PostSignupOnboarding() {
             </motion.div>
           )}
 
-          {/* ═══ STEP 1: PROFILE PICTURE ═══ */}
+          {/* ═══ STEP 1: IDENTITY (Instagram Style) ═══ */}
           {step === 1 && (
+            <motion.div key="identity" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
+              className="flex-1 flex flex-col">
+              <h2 className="font-display text-3xl font-bold tracking-tight mb-2">Claim your identity</h2>
+              <p className="text-secondary text-sm mb-8">Choose how you'll appear to your circle.</p>
+              
+              <div className="space-y-6">
+                {/* Display Name */}
+                <div className="space-y-2">
+                  <label className="text-xs font-label-bold text-secondary ml-1">Display Name</label>
+                  <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)}
+                    placeholder="e.g. Alex River"
+                    className="w-full bg-surface-container-low border-2 border-transparent focus:border-primary-container/30 rounded-2xl px-4 py-4 outline-none transition-all font-label-bold" />
+                  <p className="text-[10px] text-secondary ml-1">This is what people will see in chats.</p>
+                </div>
+
+                {/* Username */}
+                <div className="space-y-2">
+                  <label className="text-xs font-label-bold text-secondary ml-1 flex items-center gap-2">
+                    Unique Username
+                    {usernameStatus === 'available' && <span className="text-green-500 text-[10px]">✓ Available</span>}
+                    {usernameStatus === 'taken' && <span className="text-red-500 text-[10px]">✗ Taken</span>}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary font-bold">@</span>
+                    <input type="text" value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder="username"
+                      className={`w-full bg-surface-container-low border-2 rounded-2xl pl-10 pr-4 py-4 outline-none transition-all font-label-bold ${
+                        usernameStatus === 'available' ? 'border-green-400/30' : usernameStatus === 'taken' ? 'border-red-400/30' : 'border-transparent'
+                      }`} />
+                  </div>
+                  <p className="text-[10px] text-secondary ml-1">Use this to find friends and let them find you.</p>
+                </div>
+              </div>
+
+              <div className="mt-auto">
+                <button 
+                  onClick={next} 
+                  disabled={!displayName || usernameStatus !== 'available'}
+                  className="w-full bg-primary-container text-white rounded-full py-4 font-bold shadow-lg disabled:opacity-40 transition-opacity">
+                  Continue
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══ STEP 2: PROFILE PICTURE ═══ */}
+          {step === 2 && (
             <motion.div key="avatar" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
               className="flex-1 flex flex-col">
               <h2 className="font-display text-3xl font-bold tracking-tight mb-2">Add a photo</h2>
               <p className="text-secondary text-sm mb-8">Help your circle recognize you.</p>
               <div className="flex flex-col items-center mb-8">
                 <motion.div whileTap={{ scale: 0.95 }} onClick={() => fileRef.current?.click()}
-                  className="w-32 h-32 rounded-full overflow-hidden bg-surface-container-low border-4 border-primary-container/20 cursor-pointer relative group">
+                  className="w-32 h-32 rounded-full overflow-hidden bg-surface-container-low border-4 border-primary-container/20 cursor-pointer relative group shadow-xl">
                   {avatar ? <img src={avatar} className="w-full h-full object-cover" /> : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-secondary">
                       <span className="material-symbols-outlined text-3xl mb-1">add_a_photo</span>
@@ -158,6 +226,14 @@ export default function PostSignupOnboarding() {
                     <span className="material-symbols-outlined text-white text-2xl">edit</span>
                   </div>
                 </motion.div>
+                <div className="flex gap-2 mt-6 overflow-x-auto max-w-full pb-2 scrollbar-hide">
+                  {AVATARS.map((av, i) => (
+                    <button key={i} onClick={() => setAvatar(av)} 
+                      className={`w-10 h-10 rounded-full border-2 shrink-0 transition-all ${avatar === av ? 'border-primary-container scale-110' : 'border-surface-variant hover:border-primary-container/50'}`}>
+                      <img src={av} className="w-full h-full rounded-full" />
+                    </button>
+                  ))}
+                </div>
                 <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
               </div>
               <div className="mt-auto flex gap-3">
@@ -168,8 +244,8 @@ export default function PostSignupOnboarding() {
             </motion.div>
           )}
 
-          {/* ═══ STEP 2: BIO ═══ */}
-          {step === 2 && (
+          {/* ═══ STEP 3: BIO ═══ */}
+          {step === 3 && (
             <motion.div key="bio" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
               className="flex-1 flex flex-col">
               <h2 className="font-display text-3xl font-bold tracking-tight mb-2">Write your bio</h2>
@@ -192,8 +268,8 @@ export default function PostSignupOnboarding() {
             </motion.div>
           )}
 
-          {/* ═══ STEP 3: AURA ═══ */}
-          {step === 3 && (
+          {/* ═══ STEP 4: AURA ═══ */}
+          {step === 4 && (
             <motion.div key="aura" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
               className="flex-1 flex flex-col">
               <h2 className="font-display text-3xl font-bold tracking-tight mb-2">Pick your aura</h2>
@@ -202,7 +278,7 @@ export default function PostSignupOnboarding() {
                 {AURAS.map((a, i) => (
                   <motion.button key={a.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                     whileTap={{ scale: 0.95 }} onClick={() => setAura(a.id)}
-                    className={`p-4 rounded-2xl text-left transition-all border-2 ${aura === a.id ? 'border-primary-container bg-primary-container/5 shadow-lg' : 'border-transparent bg-surface-container-low'}`}>
+                    className={`p-4 rounded-2xl text-left transition-all border-2 ${aura === a.id ? 'border-primary-container bg-primary-container/5 shadow-[0_0_15px_rgba(225,29,72,0.1)]' : 'border-surface-variant bg-surface-container-low text-on-surface hover:border-on-surface/20'}`}>
                     <span className="text-2xl mb-1 block">{a.emoji}</span>
                     <span className="font-label-bold text-sm">{a.label}</span>
                   </motion.button>
@@ -216,8 +292,8 @@ export default function PostSignupOnboarding() {
             </motion.div>
           )}
 
-          {/* ═══ STEP 4: INTERESTS ═══ */}
-          {step === 4 && (
+          {/* ═══ STEP 5: INTERESTS ═══ */}
+          {step === 5 && (
             <motion.div key="interests" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
               className="flex-1 flex flex-col">
               <h2 className="font-display text-3xl font-bold tracking-tight mb-2">Your interests</h2>
@@ -240,8 +316,8 @@ export default function PostSignupOnboarding() {
             </motion.div>
           )}
 
-          {/* ═══ STEP 5: MUSIC + FINISH ═══ */}
-          {step === 5 && (
+          {/* ═══ STEP 6: MUSIC + FINISH ═══ */}
+          {step === 6 && (
             <motion.div key="music" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
               className="flex-1 flex flex-col">
               <h2 className="font-display text-3xl font-bold tracking-tight mb-2">Music taste</h2>

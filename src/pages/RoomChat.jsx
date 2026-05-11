@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import Backend from '../lib/backend';
+import Avatar from '../components/Avatar';
 
 export default function RoomChat() {
   const { roomId } = useParams();
@@ -86,7 +87,7 @@ export default function RoomChat() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h2 className="font-label-bold text-sm">{room.name}</h2>
+                <h2 className="font-label-bold text-sm text-on-background">{room.name}</h2>
                 {room.isPasswordProtected && <span className="material-symbols-outlined text-[12px] text-on-surface-variant">lock</span>}
                 {room.anonymousMode && <span className="bg-surface-variant px-1.5 py-0.5 rounded text-[9px] font-bold text-on-surface-variant">ANON</span>}
               </div>
@@ -121,13 +122,11 @@ export default function RoomChat() {
                 {/* Sender name for others */}
                 {!isMe && (i === 0 || messages[i-1]?.senderId !== msg.senderId || messages[i-1]?.type === 'system') && (
                   <div className="flex items-center gap-2 mb-1 ml-1">
-                    {msg.senderAvatar ? (
-                      <img src={msg.senderAvatar} className="w-5 h-5 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-surface-variant flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[10px] text-secondary">person</span>
-                      </div>
-                    )}
+                    <Avatar 
+                      src={msg.senderAvatar} 
+                      alt={msg.senderName} 
+                      size="xs" 
+                    />
                     <span className="text-[11px] font-label-bold text-secondary">{msg.senderName}</span>
                   </div>
                 )}
@@ -153,7 +152,7 @@ export default function RoomChat() {
                   <AnimatePresence>
                     {showReactions === msg.id && (
                       <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-                        className={`absolute ${isMe ? 'right-0' : 'left-0'} -top-10 bg-white rounded-full shadow-xl border border-on-background/10 px-2 py-1 flex gap-1 z-30`}>
+                        className={`absolute ${isMe ? 'right-0' : 'left-0'} -top-10 bg-surface-container-lowest rounded-full shadow-xl border border-on-background/10 px-2 py-1 flex gap-1 z-30`}>
                         {REACTIONS.map(e => (
                           <button key={e} onClick={() => handleReaction(msg.id, e)} className="text-lg hover:scale-125 transition-transform p-0.5">{e}</button>
                         ))}
@@ -175,7 +174,7 @@ export default function RoomChat() {
             onKeyDown={e => e.key === 'Enter' && handleSend()}
             placeholder={room.mutedUsers?.includes(user.uid) ? "You are muted" : "Type a message..."}
             disabled={room.mutedUsers?.includes(user.uid)}
-            className="flex-1 bg-surface-container-low rounded-full px-5 py-3 outline-none text-sm focus:ring-2 focus:ring-primary-container/30 disabled:opacity-50" />
+            className="flex-1 bg-surface-container-low text-on-background rounded-full px-5 py-3 outline-none text-sm focus:ring-2 focus:ring-primary-container/30 disabled:opacity-50" />
           <motion.button whileTap={{ scale: 0.9 }} onClick={handleSend} disabled={!input.trim()}
             className="w-11 h-11 bg-primary-container text-white rounded-full flex items-center justify-center shadow-lg disabled:opacity-40">
             <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
@@ -197,7 +196,7 @@ export default function RoomChat() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end" onClick={() => setShowInfo(false)}>
             <motion.div initial={{ y: 500 }} animate={{ y: 0 }} exit={{ y: 500 }} transition={{ type: 'spring', damping: 25 }}
-              onClick={e => e.stopPropagation()} className="w-full bg-white rounded-t-[2rem] p-6 pb-10 max-h-[80vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full bg-surface-container-lowest rounded-t-[2rem] p-6 pb-10 max-h-[80vh] overflow-y-auto">
               <div className="w-12 h-1.5 bg-surface-variant rounded-full mx-auto mb-6" />
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-xl" style={{ background: `linear-gradient(135deg, ${room.themeColor}, ${room.themeColor}88)` }}>

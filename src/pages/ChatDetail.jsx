@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import FirebaseSync from '../lib/firebase';
 import Backend from '../lib/backend';
+import Avatar from '../components/Avatar';
 
 // ── Status terminology (MisCom style) ──
 // "beaming"  → sent (message left your device)
@@ -214,7 +215,7 @@ export default function ChatDetail() {
 
   if (!chat && !otherUserId) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <span className="material-symbols-outlined text-6xl text-surface-variant mb-4">chat_bubble</span>
           <p className="text-secondary">Chat not found</p>
@@ -230,25 +231,23 @@ export default function ChatDetail() {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3 }}
-      className="bg-white min-h-screen flex flex-col"
+      className="bg-background min-h-screen flex flex-col"
     >
       {/* Header */}
-      <header className="fixed top-0 left-0 w-full z-50 flex items-center gap-3 px-4 h-20 bg-white/90 backdrop-blur-xl border-b border-surface-variant/30">
+      <header className="fixed top-0 left-0 w-full z-50 flex items-center gap-3 px-4 h-20 bg-background/90 backdrop-blur-xl border-b border-surface-variant/30">
         <button onClick={() => navigate('/chats')} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface hover:bg-surface-variant transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {displayAvatar ? (
-            <div className="relative shrink-0">
-              <img src={displayAvatar} alt={displayName} className="w-10 h-10 rounded-full object-cover" />
-            </div>
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-white text-lg">person</span>
-            </div>
-          )}
+          <Avatar 
+            src={displayAvatar} 
+            alt={displayName} 
+            size="md" 
+            online={areFriends}
+            showStatus={areFriends}
+          />
           <div className="min-w-0">
-            <h2 className="font-headline-md text-[16px] font-bold truncate">{displayName}</h2>
+            <h2 className="font-headline-md text-[16px] font-bold truncate text-on-background">{displayName}</h2>
             <p className="text-xs text-secondary flex items-center gap-1">
               {isIncomingRequest ? (
                 <span className="text-primary-container font-label-bold">Vibe Request</span>
@@ -270,7 +269,7 @@ export default function ChatDetail() {
 
       {/* Vibe Request Banner (for non-friends) */}
       {isIncomingRequest && (
-        <div className="fixed top-20 left-0 w-full z-40 bg-gradient-to-r from-primary-container/10 to-orange-50 border-b border-primary-container/20 px-4 py-3">
+        <div className="fixed top-20 left-0 w-full z-40 bg-gradient-to-r from-primary-container/10 to-surface border-b border-primary-container/20 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-primary-container/20 rounded-full flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-primary-container">person_add</span>
@@ -318,15 +317,12 @@ export default function ChatDetail() {
                 >
                   {/* Avatar for received messages */}
                   {!isMe && (
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-variant mr-2 shrink-0 mt-auto mb-1">
-                      {msg.senderAvatar ? (
-                        <img src={msg.senderAvatar} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="material-symbols-outlined text-secondary text-sm">person</span>
-                        </div>
-                      )}
-                    </div>
+                    <Avatar 
+                      src={msg.senderAvatar} 
+                      alt={msg.senderName} 
+                      size="xs" 
+                      className="mr-2 mt-auto mb-1"
+                    />
                   )}
 
                   <div className={`max-w-[75%] rounded-2xl px-4 py-3 ${
@@ -366,7 +362,7 @@ export default function ChatDetail() {
       </main>
 
       {/* Input */}
-      <div className="fixed bottom-0 left-0 w-full z-50 bg-white/95 backdrop-blur-xl border-t border-surface-variant/30 px-4 py-3">
+      <div className="fixed bottom-0 left-0 w-full z-50 bg-background/95 backdrop-blur-xl border-t border-surface-variant/30 px-4 py-3">
         {/* If incoming request not yet accepted, block sending */}
         {isIncomingRequest ? (
           <div className="text-center py-2">
@@ -385,7 +381,7 @@ export default function ChatDetail() {
                 onChange={e => setNewMsg(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={areFriends ? "Beam a message..." : "Send a vibe request..."}
-                className="w-full bg-surface-container-low rounded-full px-4 py-3 pr-12 outline-none text-[14px] focus:ring-2 focus:ring-primary-container/30 transition-all"
+                className="w-full bg-surface-container-low text-on-background rounded-full px-4 py-3 pr-12 outline-none text-[14px] focus:ring-2 focus:ring-primary-container/30 transition-all"
               />
               <button className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-on-surface transition-colors">
                 <span className="material-symbols-outlined text-xl">mood</span>

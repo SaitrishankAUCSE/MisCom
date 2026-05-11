@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import TopAppBar from '../components/TopAppBar';
 import { useGlobal } from '../context/GlobalContext';
+import Avatar from '../components/Avatar';
 
 export default function Chats() {
   const navigate = useNavigate();
@@ -140,20 +141,15 @@ export default function Chats() {
                       <div className="w-14 h-14 rounded-full bg-primary-container flex items-center justify-center">
                         <span className="material-symbols-outlined text-white text-2xl">group</span>
                       </div>
-                    ) : (chat.senderAvatar || chat.avatar) ? (
-                      <>
-                        <img src={viewingRequests ? (chat.senderAvatar || chat.avatar) : chat.avatar} alt={chat.name} className="w-14 h-14 rounded-full object-cover" />
-                        {chat.online && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-tertiary-container rounded-full border-2 border-surface-container-lowest" />}
-                      </>
                     ) : (
-                      <div className="w-14 h-14 rounded-full bg-surface-variant flex items-center justify-center">
-                        <span className="material-symbols-outlined text-secondary">person</span>
-                      </div>
-                    )}
-                    {viewingRequests && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-primary-container rounded-full flex items-center justify-center">
-                        <span className="material-symbols-outlined text-white text-[10px]">person_add</span>
-                      </div>
+                      <Avatar 
+                        src={viewingRequests ? (chat.senderAvatar || chat.avatar) : chat.avatar} 
+                        alt={chat.name} 
+                        size="lg" 
+                        online={chat.online}
+                        showStatus={!viewingRequests && chat.online}
+                        fallbackIcon={viewingRequests ? 'person_add' : 'person'}
+                      />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

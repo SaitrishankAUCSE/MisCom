@@ -94,7 +94,7 @@ export default function OTPVerification() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="bg-white min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-6 py-10 font-body-md text-on-background">
+      className="bg-background min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-6 py-10 font-body-md text-on-background">
       <div className="absolute top-[10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-primary-fixed/20 blur-[100px]" />
 
       <div className="w-full max-w-md mx-auto z-10 flex flex-col items-center text-center">

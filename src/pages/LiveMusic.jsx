@@ -37,7 +37,7 @@ export default function LiveMusic() {
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
-      className="bg-white font-body-md text-on-surface antialiased min-h-screen pb-24">
+      className="bg-background font-body-md text-on-surface antialiased min-h-screen pb-24">
       <TopAppBar showBack />
 
       {/* Toast */}

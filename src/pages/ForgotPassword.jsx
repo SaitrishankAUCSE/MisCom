@@ -159,7 +159,7 @@ export default function ForgotPassword() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-white min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-6 py-10 font-body-md text-on-background">
+      className="bg-background min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-6 py-10 font-body-md text-on-background">
       
       {/* Background Orbs */}
       <div className="absolute top-0 right-0 w-[40vw] h-[40vw] bg-primary-container/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3 z-0" />

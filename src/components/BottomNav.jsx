@@ -15,7 +15,7 @@ export default function BottomNav() {
   const location = useLocation();
 
   return (
-    <nav className="fixed bottom-0 left-0 w-full z-[55] flex justify-around items-center px-2 pb-[env(safe-area-inset-bottom)] bg-white/95 backdrop-blur-2xl border-t border-surface-variant/30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] h-20"
+    <nav className="fixed bottom-0 left-0 w-full z-[55] flex justify-around items-center px-2 pb-[env(safe-area-inset-bottom)] bg-surface/95 backdrop-blur-2xl border-t border-surface-variant/30 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] h-20"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 4px)' }}
     >
       {NAV_ITEMS.map((item) => {
