@@ -307,6 +307,17 @@ export function GlobalProvider({ children }) {
       .filter(r => r.receiverId === user.uid && r.status === 'pending');
   }, [user, socialVersion]);
 
+  const acceptMessageRequest = useCallback((chatId) => {
+    const success = Backend.chats.acceptMessageRequest(chatId);
+    if (success) refreshChats();
+    return success;
+  }, [refreshChats]);
+
+  const deleteMessageRequest = useCallback((chatId) => {
+    Backend.chats.deleteMessageRequest(chatId);
+    refreshChats();
+  }, [refreshChats]);
+
   const getVibeRequests = useCallback(() => {
     if (!user) return [];
     return JSON.parse(localStorage.getItem('miscom_vibe_requests') || '[]')
