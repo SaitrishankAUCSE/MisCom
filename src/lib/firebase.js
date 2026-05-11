@@ -218,8 +218,8 @@ const FirebaseSync = {
       ]);
       return cred.user;
     } catch (err) {
-      console.warn('[MisCom] Google sign-in failed:', err.message);
-      return null;
+      console.error('[MisCom] Google sign-in failed:', err.message);
+      throw err; // Rethrow to allow UI to catch and display the error
     }
   },
 
