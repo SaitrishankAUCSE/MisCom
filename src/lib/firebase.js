@@ -27,7 +27,7 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyALsXuyDxkuOAMHgaM6ApBM5HW3nmZwbzE",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyALsXuYdXkuOAMHgaM6Ap8M5HW3nmZwbzE",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "miscom-app.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "miscom-app",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "miscom-app.firebasestorage.app",
