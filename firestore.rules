@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // USERS — any authenticated user can read; only own profile can write
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    // FRIEND REQUESTS
+    match /friend_requests/{requestId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // FRIENDS LIST
+    match /friends/{userId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

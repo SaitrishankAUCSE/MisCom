@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MisCom</string>
+    <string name="title_activity_main">MisCom</string>
+    <string name="package_name">com.miscom.app</string>
+    <string name="custom_url_scheme">com.miscom.app</string>
+</resources>
