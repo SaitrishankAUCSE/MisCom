@@ -12,7 +12,7 @@ export default function TopAppBar({ title = 'MisCom', showBack = false, greeting
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications(profile?.uid);
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications(user?.uid || profile?.uid);
 
   return (
     <>

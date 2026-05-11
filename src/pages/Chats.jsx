@@ -162,7 +162,15 @@ export default function Chats() {
                     </p>
                   </div>
                   {(() => {
-                    const unread = chat.unreadCounts?.[user?.uid] || chat.unread || 0;
+                    // Try to get unread count from chat_meta (server-side)
+                    let unread = chat.unreadCounts?.[user?.uid] || chat.unread || 0;
+                    
+                    // Fallback: Check notification feed for unread DMs if count is 0
+                    if (unread === 0 && !viewingRequests) {
+                      const allNotifs = JSON.parse(localStorage.getItem('miscom_notifs') || '[]');
+                      unread = allNotifs.filter(n => !n.read && n.chatId === chat.id).length;
+                    }
+
                     if (unread > 0) {
                       return (
                         <div className="ml-4">

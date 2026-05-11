@@ -268,7 +268,6 @@ export function GlobalProvider({ children }) {
     } catch { return []; }
   };
 
-  // ── Data refresh ──
   const refreshAll = useCallback(() => {
     setChats(Backend.chats.getAll());
     setRooms(Backend.rooms.getAll());

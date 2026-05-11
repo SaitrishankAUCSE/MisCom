@@ -440,11 +440,21 @@ const FirebaseSync = {
       }
     });
 
+    // Sync notifications feed
+    const unsubNotifs = onSnapshot(collection(db, `notifications/${uid}/user_notifs`), (snap) => {
+      const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Sort by newest first
+      notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      localStorage.setItem('miscom_notifs', JSON.stringify(notifs));
+      if (onUpdate) onUpdate();
+    });
+
     return () => {
       unsubUsers();
       unsubRequests();
       unsubFriends();
       unsubChatMeta();
+      unsubNotifs();
     };
   },
 
