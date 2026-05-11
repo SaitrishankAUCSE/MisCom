@@ -4,13 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import Logo from '../components/Logo';
 import Backend from '../lib/backend';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import FirebaseSync from '../lib/firebase';
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { signup, signupWithGoogle, updateProfile } = useGlobal();
+  const { signup, signupWithGoogle } = useGlobal();
 
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');

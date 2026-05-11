@@ -23,6 +23,7 @@ const KEYS = {
   FRIENDS: 'miscom_friends',
   FRIEND_REQUESTS: 'miscom_friend_requests',
   MESSAGE_REQUESTS: 'miscom_message_requests',
+  REPORTS: 'miscom_reports',
 };
 
 const AVATARS = [
@@ -85,10 +86,14 @@ const V = {
   isEmail(input) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input); },
 };
 
-// ── Simple hash (not crypto-secure, but simulates hashing) ──
+// ── Deprecated: Simple hash (not crypto-secure, should not be used for passwords) ──
+// SECURITY: This function is not suitable for password hashing.
+// For production: use bcrypt/scrypt server-side OR leverage Firebase Auth which handles password security.
+// DO NOT store passwords in localStorage with this hash - it's trivially reversible.
 function simpleHash(str) {
+  console.warn('[MisCom] WARNING: simpleHash is deprecated for security-sensitive operations. Use server-side bcrypt or Firebase Auth instead.');
   if (!str) return '';
-  const clean = str.trim(); // Remove accidental spaces
+  const clean = str.trim();
   let hash = 0;
   for (let i = 0; i < clean.length; i++) {
     const c = clean.charCodeAt(i);
@@ -128,6 +133,7 @@ const Backend = {
     if (!get(KEYS.NOTIFICATIONS, null)) set(KEYS.NOTIFICATIONS, SEED_NOTIFS);
     if (!get(KEYS.FRIENDS, null)) set(KEYS.FRIENDS, {});
     if (!get(KEYS.FRIEND_REQUESTS, null)) set(KEYS.FRIEND_REQUESTS, []);
+    if (!get(KEYS.REPORTS, null)) set(KEYS.REPORTS, []);
   },
 
   // ── AUTH ──
@@ -153,7 +159,7 @@ const Backend = {
  
             const newUser = {
               uid: customUid || uid(), username, email: email.toLowerCase(),
-              passwordHash: simpleHash(password),
+              passwordHash: null,
               avatar: AVATARS[Math.floor(Math.random()*AVATARS.length)],
               name: username, 
               displayName: username,
@@ -191,11 +197,13 @@ const Backend = {
             const pErr = V.password(password);
             if (pErr) return reject(new Error(pErr));
 
+            return reject(new Error('Signup must use Firebase Auth. Local password signup is disabled.'));
+
             const users = get(KEYS.USERS, []);
             const otp = String(Math.floor(100000 + Math.random() * 900000));
             const newUser = {
               uid: uid(), username, email: email.toLowerCase(),
-              passwordHash: simpleHash(password),
+              passwordHash: null,
               avatar: AVATARS[Math.floor(Math.random()*AVATARS.length)],
               name: username, aura: '✨ Creating', bio: '',
               interests: [], musicGenres: [],
@@ -204,7 +212,9 @@ const Backend = {
             };
             users.push(newUser);
             set(KEYS.USERS, users);
-            set(KEYS.OTP_PENDING, { visitorUid: newUser.uid, otp, email: newUser.email, attempts: 0, expiresAt: Date.now() + 120000 });
+            // SECURITY: Store OTP only server-side (not in localStorage where scripts can read it)
+            // OTP should only be accessible via secure email verification
+            set(KEYS.OTP_PENDING, { visitorUid: newUser.uid, otpHash: simpleHash(otp), email: newUser.email, attempts: 0, expiresAt: Date.now() + 120000 });
             
             // Try sending actual email if EmailJS is configured
             if (import.meta.env.VITE_EMAILJS_SERVICE_ID) {
@@ -218,12 +228,15 @@ const Backend = {
                 console.log(`[MisCom] OTP securely sent to ${email}`);
               } catch (err) {
                 console.error('[MisCom] Failed to send email via EmailJS:', err);
+                // Fallback: Log to console but do NOT expose OTP to client
+                console.warn(`[MisCom] Email send failed. OTP not exposed to client for security.`);
               }
             } else {
-              console.warn(`[MisCom] VITE_EMAILJS_SERVICE_ID missing. Fallback OTP for ${email}: ${otp}`);
+              console.warn(`[MisCom] EmailJS not configured. User must verify via email (OTP not exposed to client).`);
             }
 
-            resolve({ user: newUser, otp });
+            // SECURITY: Do NOT return OTP in response - client cannot access it
+            resolve({ user: newUser });
           } catch (e) {
             reject(e);
           }
@@ -237,6 +250,18 @@ const Backend = {
           try {
             if (!identifier) return reject(new Error('Please enter your email or username.'));
             const isEmail = V.isEmail(identifier);
+
+            if (!isEmail) {
+              return reject(new Error('Please enter the email address for your account.'));
+            }
+
+            if (FirebaseSync.isReady()) {
+              await FirebaseSync.sendPasswordReset(identifier.toLowerCase());
+              return resolve({ email: identifier.toLowerCase(), provider: 'firebase' });
+            }
+
+            return reject(new Error('Password reset is unavailable until Firebase is configured.'));
+
             let users = get(KEYS.USERS, []);
             
             // Check local storage first
@@ -259,7 +284,7 @@ const Backend = {
             if (!user) return reject(new Error(isEmail ? 'No account found with this email.' : 'User does not exist.'));
 
             const otp = String(Math.floor(100000 + Math.random() * 900000));
-            set('miscom_reset_pending', { uid: user.uid, email: user.email, otp, attempts: 0, expiresAt: Date.now() + 120000 });
+            set('miscom_reset_pending', { uid: user.uid, email: user.email, otpHash: simpleHash(otp), attempts: 0, expiresAt: Date.now() + 120000 });
 
             // Send EmailJS
             if (import.meta.env.VITE_EMAILJS_SERVICE_ID) {
@@ -274,7 +299,7 @@ const Backend = {
                 console.error('[MisCom] Password Reset EmailJS Error:', err);
               }
             } else {
-              console.warn(`[MisCom] Dev Mode Reset OTP for ${user.email}: ${otp}`);
+              console.warn('[MisCom] EmailJS is not configured. Password reset OTP was not exposed to the client.');
             }
             resolve({ email: user.email });
           } catch (e) {
@@ -295,7 +320,7 @@ const Backend = {
           pending.attempts++;
           set('miscom_reset_pending', pending);
 
-          if (code !== pending.otp) {
+          if (simpleHash(code) !== pending.otpHash) {
             return reject(new Error('Invalid OTP.'));
           }
 
@@ -316,10 +341,8 @@ const Backend = {
           const users = get(KEYS.USERS, []);
           const idx = users.findIndex(u => u.uid === pending.uid);
           if (idx !== -1) {
-            users[idx].passwordHash = simpleHash(newPassword);
-            set(KEYS.USERS, users);
             localStorage.removeItem('miscom_reset_pending');
-            resolve();
+            reject(new Error('Password resets must be completed through Firebase Auth.'));
           } else {
             reject(new Error('User not found.'));
           }
@@ -338,7 +361,7 @@ const Backend = {
           pending.attempts++;
           set(KEYS.OTP_PENDING, pending);
 
-          if (code !== pending.otp) {
+          if (simpleHash(code) !== pending.otpHash) {
             return reject(new Error(`Invalid code. ${5 - pending.attempts} attempts remaining.`));
           }
 
@@ -360,7 +383,7 @@ const Backend = {
       const pending = get(KEYS.OTP_PENDING, null);
       if (!pending) return null;
       const otp = String(Math.floor(100000 + Math.random() * 900000));
-      pending.otp = otp; pending.attempts = 0; pending.expiresAt = Date.now() + 120000;
+      pending.otpHash = simpleHash(otp); pending.attempts = 0; pending.expiresAt = Date.now() + 120000;
       set(KEYS.OTP_PENDING, pending);
       
       if (import.meta.env.VITE_EMAILJS_SERVICE_ID) {
@@ -378,10 +401,10 @@ const Backend = {
           console.error('[MisCom] Failed to resend email via EmailJS:', err);
         }
       } else {
-        console.warn(`[MisCom] New OTP: ${otp}`);
+        console.warn('[MisCom] EmailJS is not configured. OTP was not exposed to the client.');
       }
       
-      return otp;
+      return true;
     },
 
     login(identifier, password, skipPasswordCheck = false) {
@@ -410,8 +433,8 @@ const Backend = {
             }
           }
 
-          if (!skipPasswordCheck && user.passwordHash !== simpleHash(password)) {
-            return reject(new Error('Incorrect password'));
+          if (!skipPasswordCheck) {
+            return reject(new Error('Password login must use Firebase Auth.'));
           }
 
           const token = uid() + '-' + Date.now();
@@ -447,7 +470,7 @@ const Backend = {
             if (!user) {
               isNewUser = true;
               user = {
-                uid: uid(), username: (searchEmail.split('@')[0] || 'user').replace(/[^a-z0-9_]/g, ''), email: searchEmail, passwordHash: simpleHash('google-oauth'),
+                uid: uid(), username: (searchEmail.split('@')[0] || 'user').replace(/[^a-z0-9_]/g, ''), email: searchEmail, passwordHash: null,
                 avatar: AVATARS[Math.floor(Math.random()*AVATARS.length)], name: displayName || 'User', aura: '🔥 On Fire', bio: '',
                 interests: [], musicGenres: [], verified: true, createdAt: Date.now(),
                 streakDays: 0, socialEnergy: 50, isGoogleUser: true,
@@ -932,12 +955,7 @@ const Backend = {
           const users = get(KEYS.USERS, []);
           const user = users.find(u => u.uid === uid2);
           if (!user) return reject(new Error('User not found'));
-          if (user.passwordHash !== simpleHash(currentPw)) return reject(new Error('Current password is incorrect'));
-          const pwErr = V.password(newPw);
-          if (pwErr) return reject(new Error(pwErr));
-          user.passwordHash = simpleHash(newPw);
-          set(KEYS.USERS, users);
-          resolve(true);
+          return reject(new Error('Password changes must use Firebase Auth.'));
         }, 800);
       });
     },
@@ -947,7 +965,8 @@ const Backend = {
           const users = get(KEYS.USERS, []);
           const user = users.find(u => u.uid === uid2);
           if (!user) return reject(new Error('User not found'));
-          if (user.passwordHash !== simpleHash(password)) return reject(new Error('Incorrect password'));
+          if (!user.passwordHash) return reject(new Error('Email changes must use Firebase Auth.'));
+          return reject(new Error('Email changes must use Firebase Auth.'));
           if (users.find(u => u.email === newEmail.toLowerCase() && u.uid !== uid2)) return reject(new Error('Email already in use'));
           user.email = newEmail.toLowerCase();
           set(KEYS.USERS, users);
@@ -961,7 +980,8 @@ const Backend = {
           const users = get(KEYS.USERS, []);
           const user = users.find(u => u.uid === uid2);
           if (!user) return reject(new Error('User not found'));
-          if (user.passwordHash !== simpleHash(password)) return reject(new Error('Incorrect password'));
+          if (!user.passwordHash) return reject(new Error('Account deletion must use Firebase Auth.'));
+          return reject(new Error('Account deletion must use Firebase Auth.'));
           set(KEYS.USERS, users.filter(u => u.uid !== uid2));
           localStorage.removeItem(KEYS.SESSION);
           resolve(true);
@@ -990,7 +1010,11 @@ const Backend = {
   // ── BLOCKED / MUTED ──
   blocked: {
     getAll() { return get(KEYS.BLOCKED, []); },
-    add(userId, name) { const b = this.getAll(); b.push({ id:userId, name, blockedAt:Date.now() }); set(KEYS.BLOCKED, b); },
+    add(userId, name) {
+      const b = this.getAll();
+      if (!b.some(x => x.id === userId)) b.push({ id:userId, name, blockedAt:Date.now() });
+      set(KEYS.BLOCKED, b);
+    },
     remove(userId) { set(KEYS.BLOCKED, this.getAll().filter(b => b.id !== userId)); },
     count() { return this.getAll().length; },
   },
@@ -1017,6 +1041,17 @@ const Backend = {
       const keep = [KEYS.USERS, KEYS.SESSION, KEYS.SETTINGS];
       Object.values(KEYS).forEach(k => { if (!keep.includes(k)) localStorage.removeItem(k); });
       Backend.init();
+    },
+  },
+
+  reports: {
+    getAll() { return get(KEYS.REPORTS, []); },
+    add({ reporterId, reportedUserId, reason = 'unspecified', chatId = null }) {
+      const reports = this.getAll();
+      const report = { id: 'report-' + Date.now(), reporterId, reportedUserId, reason, chatId, createdAt: Date.now(), status: 'open' };
+      reports.unshift(report);
+      set(KEYS.REPORTS, reports);
+      return report;
     },
   },
 
@@ -1269,6 +1304,8 @@ const Backend = {
 
     // ─── BLOCKING ─────────────────────────────────────────────────────────
     async blockUser(userId, blockId) {
+      const blockedUser = get(KEYS.USERS, []).find(u => u.uid === blockId);
+      Backend.blocked.add(blockId, blockedUser?.displayName || blockedUser?.name || blockedUser?.username || 'User');
       if (FirebaseSync.isReady()) await FirebaseSync.blockUser(userId, blockId);
       return { success: true };
     },

@@ -14,6 +14,15 @@ const db = getFirestore();
 const auth = admin.auth();
 const storage = admin.storage();
 
+function requireCallableAdmin(context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+  }
+  if (context.auth.token.admin !== true) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
+  }
+}
+
 // ─── DM message notification ────────────────────────────────────────────────
 exports.onNewDMMessage = onDocumentCreated(
   'chats/{chatId}/messages/{messageId}',
@@ -198,9 +207,6 @@ exports.deleteUserAccount = functions.https.onCall(async (data, context) => {
     await batch.commit();
     await auth.deleteUser(uid);
 
-    await batch.commit();
-    await auth.deleteUser(uid);
-
     return { success: true, message: 'Account wiped.' };
   } catch (error) {
     throw new functions.https.HttpsError('internal', error.message);
@@ -288,9 +294,15 @@ exports.onNewMessageRequest = onDocumentCreated(
 
 // ─── Global Nuclear Reset (Emergency Only) ───────────────────────────────
 exports.globalNuke = functions.https.onCall(async (data, context) => {
-  // Only allow if the secret key matches
+  requireCallableAdmin(context);
+
+  const configuredSecret = process.env.MISCOM_NUKE_SECRET || functions.config().miscom?.nuke_secret;
+  if (!configuredSecret) {
+    throw new functions.https.HttpsError('failed-precondition', 'Nuke secret is not configured on the server.');
+  }
+
   const { secret } = data;
-  if (secret !== 'MISCOM_NUKE_2026') {
+  if (secret !== configuredSecret) {
     throw new functions.https.HttpsError('permission-denied', 'Invalid secret key.');
   }
 

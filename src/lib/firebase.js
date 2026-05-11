@@ -6,10 +6,8 @@ import {
   signOut, 
   GoogleAuthProvider, 
   signInWithPopup,
-  onAuthStateChanged,
-  sendEmailVerification,
-  updateProfile,
-  deleteUser,
+  sendPasswordResetEmail,
+  updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
   GoogleAuthProvider as GoogleAuth
@@ -27,25 +25,42 @@ import {
   orderBy,
   serverTimestamp,
   onSnapshot,
-  deleteDoc
+  deleteDoc,
+  arrayUnion,
+  arrayRemove,
+  limit
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyALsXuYdXkuOAMHgaM6Ap8M5HW3nmZwbzE",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "miscom-app.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "miscom-app",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "miscom-app.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "524446179930",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:524446179930:web:88834cfdf4f12f12742e63",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-2X5F7322PM"
+const requiredFirebaseEnv = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+const missingFirebaseEnv = requiredFirebaseEnv.filter(key => !import.meta.env[key]);
+
+const firebaseConfig = missingFirebaseEnv.length ? null : {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 let app, auth, db, storage, googleProvider;
 let firebaseReady = false;
 
 try {
+  if (!firebaseConfig) {
+    throw new Error(`Missing Firebase env vars: ${missingFirebaseEnv.join(', ')}`);
+  }
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
@@ -65,6 +80,8 @@ try {
  */
 const FirebaseSync = {
   isReady() { return firebaseReady; },
+  getCurrentUser() { return auth?.currentUser || null; },
+  getConfig() { return firebaseConfig ? { ...firebaseConfig } : null; },
 
   // Save user profile to Firestore
   async saveUser(userData) {
@@ -95,9 +112,11 @@ const FirebaseSync = {
         updatedAt: serverTimestamp()
       };
 
-      await Promise.all([
-        setDoc(doc(db, 'users', docId), publicData, { merge: true }),
-        setDoc(doc(db, 'users', docId, 'private', 'info'), privateData, { merge: true }),
+      await Promise.race([
+        Promise.all([
+          setDoc(doc(db, 'users', docId), publicData, { merge: true }),
+          setDoc(doc(db, 'users', docId, 'private', 'info'), privateData, { merge: true })
+        ]),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore timeout')), 5000))
       ]);
       console.log('[MisCom] User profile synced (email protected)');
@@ -148,47 +167,37 @@ const FirebaseSync = {
     }
   },
 
-  // Search users directly from Firestore (fallback when local data is stale)
+  // Search users using Firestore queries (not client-side filtering of entire collection)
+  // Note: Firestore has no full-text search, so this still does client-side filtering
+  // For production, consider using Algolia or ElasticSearch
   async searchUsers(queryStr, currentUserId) {
     if (!firebaseReady || !db || !queryStr || queryStr.length < 2) return [];
     try {
+      // Query users with matching normalized username prefix
+      const normalizedQuery = (queryStr || '').trim().toLowerCase();
+      const q = query(
+        collection(db, 'users'), 
+        where('normalizedUsername', '>=', normalizedQuery),
+        where('normalizedUsername', '<=', `${normalizedQuery}\uf8ff`),
+        limit(20) // Limit to 20 results to avoid pulling entire collection
+      );
+      
       const snap = await Promise.race([
-        getDocs(collection(db, 'users')),
+        getDocs(q),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase search timeout')), 5000))
       ]);
       
-      const q = queryStr.toLowerCase();
-      const results = [];
-      snap.docs.forEach(d => {
+      const results = snap.docs.map(d => {
         const data = d.data();
-        const u = { uid: data.appUid || d.id, ...data };
-        if ((u.username || '').toLowerCase().includes(q) ||
-            (u.displayName || '').toLowerCase().includes(q) ||
-            (u.name || '').toLowerCase().includes(q)) {
-          results.push({
-            uid: u.uid, 
-            username: u.username, 
-            displayName: u.displayName || u.name || u.username,
-            name: u.name,
-            avatar: u.avatar, 
-            aura: u.aura, 
-            bio: u.bio
-          });
-        }
+        return {
+          uid: data.appUid || d.id, 
+          username: data.username, 
+          displayName: data.displayName || data.name || data.username,
+          avatar: data.avatar, 
+          aura: data.aura, 
+          bio: data.bio
+        };
       });
-      
-      // Also merge these users into localStorage so future local searches find them
-      const localUsers = JSON.parse(localStorage.getItem('miscom_users') || '[]');
-      let changed = false;
-      snap.docs.forEach(d => {
-        const data = d.data();
-        const remoteUser = { uid: data.appUid || d.id, ...data };
-        if (!localUsers.find(lu => lu.uid === remoteUser.uid || lu.username === remoteUser.username)) {
-          localUsers.push(remoteUser);
-          changed = true;
-        }
-      });
-      if (changed) localStorage.setItem('miscom_users', JSON.stringify(localUsers));
       
       return results;
     } catch (err) {
@@ -270,44 +279,6 @@ const FirebaseSync = {
     try { await signOut(auth); } catch {}
   },
 
-  // Firebase Auth & Firestore: Delete completely
-  async deleteAccount() {
-    if (!firebaseReady || !auth || !auth.currentUser) return;
-    try {
-      const functions = getFunctions(app);
-      const wipeFunc = httpsCallable(functions, 'deleteUserAccount');
-      const result = await wipeFunc();
-      return result.data;
-    } catch (e) {
-      console.error("Error wiping Firebase account:", e);
-      throw e;
-    }
-  },
-
-  /**
-   * Reauthenticate user before sensitive operations
-   */
-  async reauthenticate(password) {
-    if (!auth?.currentUser) return false;
-    try {
-      const user = auth.currentUser;
-      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
-      
-      if (isGoogle) {
-        const provider = new GoogleAuth();
-        await signInWithPopup(auth, provider);
-        return true;
-      } else {
-        const credential = EmailAuthProvider.credential(user.email, password);
-        await reauthenticateWithCredential(user, credential);
-        return true;
-      }
-    } catch (err) {
-      console.error('Reauthentication failed:', err);
-      throw err;
-    }
-  },
-
   // ── SOCIAL (Firestore Writes) ──
   async sendVibeRequest(req) {
     if (!firebaseReady || !db) return;
@@ -359,6 +330,19 @@ const FirebaseSync = {
     } catch (e) { console.error(e); }
   },
 
+  async reportUser(report) {
+    if (!firebaseReady || !db || !auth?.currentUser) return;
+    try {
+      const reportId = report.id || `report-${Date.now()}`;
+      await setDoc(doc(db, 'reports', reportId), {
+        ...report,
+        reporterId: auth.currentUser.uid,
+        status: 'open',
+        createdAt: serverTimestamp()
+      });
+    } catch (e) { console.error(e); }
+  },
+
   async sendMessage(chatId, msg) {
     if (!firebaseReady || !db) return;
     try {
@@ -399,7 +383,7 @@ const FirebaseSync = {
   },
 
   listenMessages(chatId, onUpdate) {
-    if (!firebaseReady || !db) return () => {};
+    if (!firebaseReady || !db || !chatId) return () => {};
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
     return onSnapshot(q, (snap) => {
       const msgs = snap.docs.map(d => d.data());
@@ -417,7 +401,7 @@ const FirebaseSync = {
   // ── REALTIME GLOBAL SYNC ──
   // Fetches latest data from Firestore and hydrates the local localStorage so backend.js works across devices
   startRealtimeSync(uid, onUpdate) {
-    if (!firebaseReady || !db) return () => {};
+    if (!firebaseReady || !db || !uid) return () => {};
 
     // Sync all users
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
@@ -552,27 +536,44 @@ const FirebaseSync = {
 
   // ── ACCOUNT LIFECYCLE ──
   async reauthenticate(password) {
-    if (!auth.currentUser) throw new Error('No user logged in');
-    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
-    return await reauthenticateWithCredential(auth.currentUser, credential);
+    if (!auth?.currentUser) throw new Error('No user logged in');
+    const user = auth.currentUser;
+    const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+
+    if (isGoogle) {
+      const provider = new GoogleAuth();
+      return await signInWithPopup(auth, provider);
+    }
+
+    const credential = EmailAuthProvider.credential(user.email, password);
+    return await reauthenticateWithCredential(user, credential);
+  },
+
+  async sendPasswordReset(email) {
+    if (!firebaseReady || !auth || !email) return;
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (err) {
+      console.warn('[MisCom] Firebase password reset failed:', err.message);
+      throw err;
+    }
+  },
+
+  async changePassword(currentPassword, newPassword) {
+    if (!firebaseReady || !auth?.currentUser) throw new Error('No user logged in');
+    await this.reauthenticate(currentPassword);
+    await updatePassword(auth.currentUser, newPassword);
   },
 
   async deleteAccount() {
-    if (!firebaseReady || !auth.currentUser) return;
+    if (!firebaseReady || !auth?.currentUser) return;
     try {
-      // Call the Cloud Function for deep cleanup (if deployed)
-      const functions = getFunctions();
+      const functions = getFunctions(app);
       const deleteFunc = httpsCallable(functions, 'deleteUserAccount');
-      await deleteFunc();
-      
-      // Also delete from Auth client-side
-      await deleteUser(auth.currentUser);
+      const result = await deleteFunc();
+      return result.data;
     } catch (e) {
       console.error('Delete account error:', e);
-      // Fallback: If function fails (e.g. not deployed), try to just delete auth user
-      if (auth.currentUser) {
-        await deleteUser(auth.currentUser).catch(() => {});
-      }
       throw e;
     }
   },
@@ -580,7 +581,7 @@ const FirebaseSync = {
   async globalNuke(secret) {
     if (!firebaseReady) return;
     try {
-      const functions = getFunctions();
+      const functions = getFunctions(app);
       const nukeFn = httpsCallable(functions, 'globalNuke');
       const result = await nukeFn({ secret });
       return result.data;

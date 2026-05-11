@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import { useChat } from '../hooks/useChat';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../lib/firebase';
 import FirebaseSync from '../lib/firebase';
+import Backend from '../lib/backend';
 import Avatar from '../components/Avatar';
 import MessageBubble from '../components/MessageBubble';
 import EchoingIndicator from '../components/EchoingIndicator';
@@ -18,7 +20,11 @@ export default function ChatDetail() {
   const [otherUser, setOtherUser] = useState(null);
   const [inputText, setInputText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
+  const [showActions, setShowActions] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [toast, setToast] = useState('');
   const messagesEndRef = useRef(null);
+  const fileRef = useRef(null);
 
   const {
     messages, loading, isEchoing,
@@ -37,7 +43,8 @@ export default function ChatDetail() {
         if (u) setOtherUser(u);
         return;
       }
-      const chatMetaSnap = await getDoc(doc(db, `chat_meta/${chatId}`));
+      let chatMetaSnap = await getDoc(doc(db, `chat_meta/${chatId}`));
+      if (!chatMetaSnap.exists()) chatMetaSnap = await getDoc(doc(db, `chats/${chatId}`));
       if (!chatMetaSnap.exists()) return;
       const { participants } = chatMetaSnap.data();
       const otherId = participants.find(id => id !== user.uid);
@@ -81,6 +88,54 @@ export default function ChatDetail() {
     });
   };
 
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2500);
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !user?.uid) return;
+    if (!file.type.startsWith('image/')) return showToast('Choose an image file.');
+    if (file.size > 10 * 1024 * 1024) return showToast('Images must be under 10 MB.');
+
+    setUploading(true);
+    try {
+      const imageRef = ref(storage, `chat_media/${chatId}/${user.uid}/${Date.now()}-${file.name}`);
+      await uploadBytes(imageRef, file, { contentType: file.type });
+      const mediaUrl = await getDownloadURL(imageRef);
+      await sendEcho({ text: '', type: 'image', mediaUrl, replyTo });
+      setReplyTo(null);
+    } catch (err) {
+      console.error(err);
+      showToast('Image upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!otherUser?.uid || !user?.uid) return;
+    await Backend.social.blockUser(user.uid, otherUser.uid);
+    showToast(`${otherUser.displayName || otherUser.name || 'User'} blocked.`);
+    setShowActions(false);
+    navigate('/chats');
+  };
+
+  const handleReport = async () => {
+    if (!otherUser?.uid || !user?.uid) return;
+    const report = Backend.reports.add({
+      reporterId: user.uid,
+      reportedUserId: otherUser.uid,
+      reason: 'chat_safety',
+      chatId
+    });
+    await FirebaseSync.reportUser(report);
+    showToast('Report submitted for review.');
+    setShowActions(false);
+  };
+
   const isLastInGroup = (idx) => {
     if (idx === messages.length - 1) return true;
     return messages[idx + 1]?.senderId !== messages[idx].senderId;
@@ -95,6 +150,14 @@ export default function ChatDetail() {
   return (
     <div className="bg-background min-h-screen flex flex-col relative">
       {/* Header */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[80] bg-on-background text-white px-5 py-3 rounded-full text-sm font-label-bold shadow-2xl">
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header className="fixed top-0 left-0 w-full z-50 flex items-center gap-3 px-4 h-20 bg-background/80 backdrop-blur-xl border-b border-on-background/5">
         <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-on-surface/5 transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
@@ -111,9 +174,24 @@ export default function ChatDetail() {
         <button className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-on-surface/5">
           <span className="material-symbols-outlined">call</span>
         </button>
-        <button className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-on-surface/5">
+        <button onClick={() => setShowActions(v => !v)} className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-on-surface/5">
           <span className="material-symbols-outlined">more_vert</span>
         </button>
+        <AnimatePresence>
+          {showActions && (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+              className="absolute right-4 top-16 w-52 rounded-2xl bg-surface-container-lowest border border-on-background/10 shadow-2xl overflow-hidden">
+              <button onClick={handleReport} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-label-bold hover:bg-surface-container-low">
+                <span className="material-symbols-outlined text-error">flag</span>
+                Report user
+              </button>
+              <button onClick={handleBlock} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-label-bold text-error hover:bg-error/10">
+                <span className="material-symbols-outlined">block</span>
+                Block user
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Messages Feed */}
@@ -166,8 +244,9 @@ export default function ChatDetail() {
         </AnimatePresence>
 
         <div className="flex items-center gap-3">
-          <button className="w-11 h-11 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:bg-on-surface/10 transition-colors shrink-0">
-            <span className="material-symbols-outlined">add</span>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+          <button disabled={uploading} onClick={() => fileRef.current?.click()} className="w-11 h-11 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:bg-on-surface/10 transition-colors shrink-0 disabled:opacity-50">
+            <span className="material-symbols-outlined">{uploading ? 'hourglass_empty' : 'add_photo_alternate'}</span>
           </button>
           <div className="flex-1 relative">
             <input

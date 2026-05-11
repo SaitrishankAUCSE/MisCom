@@ -3,10 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import TopAppBar from '../components/TopAppBar';
 import { useGlobal } from '../context/GlobalContext';
+import Backend from '../lib/backend';
 
 export default function MemoryTimeline() {
   const navigate = useNavigate();
-  const { memories, user } = useGlobal();
+  const { user } = useGlobal();
+  const storedMemories = JSON.parse(localStorage.getItem('miscom_memories') || '[]');
+  const chatHighlights = Backend.chats.getAll().slice(0, 4).map(chat => ({
+    id: `chat-${chat.id}`,
+    title: chat.lastMessage || `Started chatting with ${chat.name}`,
+    label: chat.name || 'Conversation',
+    timestamp: chat.lastTimestamp || chat.lastMessageTime || Date.now(),
+    icon: 'chat_bubble',
+  }));
+  const memoryItems = [...storedMemories, ...chatHighlights].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
@@ -33,8 +43,44 @@ export default function MemoryTimeline() {
       </motion.div>
 
       <main className="max-w-md mx-auto px-margin-mobile space-y-16 pt-16">
+        {memoryItems.length === 0 && (
+          <section className="py-24 text-center">
+            <div className="w-20 h-20 mx-auto rounded-full bg-surface-container-low flex items-center justify-center mb-4">
+              <span className="material-symbols-outlined text-4xl text-secondary/50">auto_awesome</span>
+            </div>
+            <h2 className="font-headline-md text-xl font-bold mb-2">No memories yet</h2>
+            <p className="text-secondary text-sm max-w-[260px] mx-auto">Start chats, join rooms, and save moments. Your best social highlights will appear here.</p>
+          </section>
+        )}
+
+        {memoryItems.length > 0 && (
+          <section className="relative group">
+            <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-surface-variant/50 -z-10" />
+            <div className="flex flex-col gap-4 relative">
+              <div className="flex items-center gap-4">
+                <div className="w-4 h-4 rounded-full bg-primary-container border-4 border-background shadow-[0_0_15px_rgba(225,29,72,0.6)]" />
+                <span className="font-label-bold text-label-bold text-primary-container tracking-widest uppercase">Your Highlights</span>
+              </div>
+              <div className="ml-7 space-y-3">
+                {memoryItems.map(item => (
+                  <motion.div key={item.id} whileTap={{ scale: 0.98 }}
+                    className="bg-surface-bright border border-background shadow-[0_12px_40px_-12px_rgba(225,29,72,0.15)] rounded-[22px] p-4 flex items-start gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-primary-container/10 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-primary-container">{item.icon || 'auto_awesome'}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-secondary font-label-bold uppercase tracking-wider mb-1">{item.label || 'Memory'} · {Backend.timeAgo(item.timestamp || Date.now())}</p>
+                      <h2 className="font-label-bold text-on-surface leading-snug">{item.title}</h2>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Timeline 1 */}
-        <section className="relative group">
+        {memoryItems.length === 0 && <section className="relative group">
           <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-surface-variant/50 -z-10" />
           <div className="flex flex-col gap-4 relative">
             <div className="flex items-center gap-4">
@@ -57,10 +103,10 @@ export default function MemoryTimeline() {
               </div>
             </motion.div>
           </div>
-        </section>
+        </section>}
 
         {/* Timeline 2 */}
-        <section className="relative group">
+        {memoryItems.length === 0 && <section className="relative group">
           <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-surface-variant/50 -z-10" />
           <div className="flex flex-col gap-4 relative">
             <div className="flex items-center gap-4">
@@ -83,10 +129,10 @@ export default function MemoryTimeline() {
               </motion.div>
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* Now */}
-        <section className="relative group">
+        {memoryItems.length === 0 && <section className="relative group">
           <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-surface-variant/50 to-transparent -z-10" />
           <div className="flex flex-col gap-4 relative">
             <div className="flex items-center gap-4">
@@ -112,7 +158,7 @@ export default function MemoryTimeline() {
               </div>
             </motion.div>
           </div>
-        </section>
+        </section>}
       </main>
     </motion.div>
   );

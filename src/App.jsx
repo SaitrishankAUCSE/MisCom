@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import FirebaseSync from './lib/firebase';
 
@@ -12,13 +12,11 @@ import Signup from './pages/Signup';
 import OTPVerification from './pages/OTPVerification';
 import ForgotPassword from './pages/ForgotPassword';
 import ProfileSetup from './pages/ProfileSetup';
-import Welcome from './pages/Welcome';
 import Home from './pages/Home';
 import Chats from './pages/Chats';
 import ChatDetail from './pages/ChatDetail';
 import VibeRooms from './pages/VibeRooms';
 import MemoryTimeline from './pages/MemoryTimeline';
-import NukeDatabase from './pages/NukeDatabase';
 import Profile from './pages/Profile';
 import LiveMusic from './pages/LiveMusic';
 import AIInsights from './pages/AIInsights';
@@ -27,7 +25,6 @@ import ProtectedRooms from './pages/ProtectedRooms';
 import RoomChat from './pages/RoomChat';
 import Discover from './pages/Discover';
 import Requests from './pages/Requests';
-import PostSignupOnboarding from './pages/PostSignupOnboarding';
 import Appearance from './pages/Appearance';
 import BottomNav from './components/BottomNav';
 import { GlobalProvider, useGlobal } from './context/GlobalContext';
@@ -82,11 +79,12 @@ function Protected({ children, requiresOnboarding = false }) {
   }
 }
 
-// Public Route — redirects authenticated users to /home
+// Public Route - redirects authenticated users to /home
 function PublicOnly({ children }) {
   const { isAuthenticated, isAuthLoading } = useGlobal();
   if (isAuthLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" /></div>;
   if (isAuthenticated) return <Navigate to="/home" replace />;
+  
   return children;
 }
 
@@ -94,13 +92,11 @@ const BOTTOM_NAV_PATHS = ['/home', '/chats', '/discover', '/secret-spaces', '/vi
 
 function AppRoutes() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { profile } = useGlobal();
   const showBottomNav = BOTTOM_NAV_PATHS.includes(location.pathname);
 
   // Real-time notifications for the whole app
-  const { notifications, unreadCount, toast, setToast, markRead, markAllRead } 
-    = useNotifications(profile?.uid);
+  const { toast, setToast } = useNotifications(profile?.uid);
 
   return (
     <div className="relative min-h-screen bg-background">
@@ -143,7 +139,7 @@ function AppRoutes() {
           <Route path="/appearance" element={<Protected><Appearance /></Protected>} />
           
           {/* Admin / Utility */}
-          <Route path="/nuke" element={<NukeDatabase />} />
+          <Route path="/nuke" element={<Navigate to="/" replace />} />
           <Route path="/onboarding" element={<Navigate to="/setup" replace />} />
 
           {/* Catch-all */}

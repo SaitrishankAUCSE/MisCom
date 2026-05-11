@@ -35,6 +35,11 @@ export default function LiveMusic() {
     setTimeout(() => setShowToast(''), 2000);
   };
 
+  const handleStartSession = () => {
+    setShowToast('Music broadcasting is coming soon.');
+    setTimeout(() => setShowToast(''), 2500);
+  };
+
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
       className="bg-background font-body-md text-on-surface antialiased min-h-screen pb-24">
@@ -66,7 +71,7 @@ export default function LiveMusic() {
             </p>
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={() => alert("Start broadcasting coming soon!")}
+              onClick={handleStartSession}
               className="py-3 px-6 bg-primary-container text-on-primary font-label-bold rounded-full shadow-lg"
             >
               Start a Session

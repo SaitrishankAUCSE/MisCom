@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
@@ -49,15 +49,32 @@ export default function Settings() {
   const [showToast, setShowToast] = useState('');
   const [modal, setModal] = useState(null); // 'password' | 'delete' | 'logout' | 'theme'
 
-  // Toggle states
-  const [toggles, setToggles] = useState({
+  const defaultToggles = {
     darkMode: false, lateNight: false, pushNotifs: true, msgNotifs: true,
     callNotifs: true, streakReminders: true, roomAlerts: true, musicPresence: true,
     aiInsights: true, ghostMode: false, hideOnline: false, invisStory: false,
     privateAccount: false, disappearing: false, autoDownload: true, twoFactor: false,
     auraVisible: true, memoryPrivate: false, streakVisible: true, badgeVisible: true,
+  };
+  const [toggles, setToggles] = useState(() => ({ ...defaultToggles, ...Backend.settings.getAll() }));
+  const [storageUsed, setStorageUsed] = useState(() => Backend.data.formatSize(Backend.data.getStorageUsed()));
+  const [blockedCount, setBlockedCount] = useState(() => Backend.blocked.count());
+  const [showBlocked, setShowBlocked] = useState(false);
+
+  useEffect(() => {
+    setToggles({ ...defaultToggles, ...Backend.settings.getAll() });
+    setStorageUsed(Backend.data.formatSize(Backend.data.getStorageUsed()));
+    setBlockedCount(Backend.blocked.count());
+  }, []);
+
+  const toggle = (key) => setToggles(p => {
+    const nextValue = !p[key];
+    Backend.settings.update(key, nextValue);
+    if (['ghostMode', 'hideOnline', 'privateAccount', 'auraVisible', 'memoryPrivate', 'streakVisible', 'badgeVisible'].includes(key)) {
+      updateProfile({ [key]: nextValue }).catch(() => {});
+    }
+    return { ...p, [key]: nextValue };
   });
-  const toggle = (key) => setToggles(p => ({ ...p, [key]: !p[key] }));
   const toast = (msg) => { setShowToast(msg); setTimeout(() => setShowToast(''), 2500); };
 
   // Change password state
@@ -72,12 +89,16 @@ export default function Settings() {
     if (Backend.V.password(pwForm.newPw)) return setPwError(Backend.V.password(pwForm.newPw));
     if (pwForm.newPw !== pwForm.confirm) return setPwError('Passwords do not match');
     setPwLoading(true);
-    setTimeout(() => {
+    try {
+      await FirebaseSync.changePassword(pwForm.current, pwForm.newPw);
       setPwLoading(false);
       setPwSuccess(true);
       toast('Password changed successfully 🔒');
       setTimeout(() => { setModal(null); setPwSuccess(false); setPwForm({ current: '', newPw: '', confirm: '' }); }, 1500);
-    }, 1000);
+    } catch (err) {
+      setPwLoading(false);
+      setPwError(err.message || 'Could not change password');
+    }
   };
 
   // Delete account state
@@ -113,6 +134,36 @@ export default function Settings() {
         {showToast && (
           <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
             className="fixed top-6 left-1/2 -translate-x-1/2 z-[80] bg-on-background text-white px-6 py-3 rounded-full font-label-bold text-sm shadow-2xl">{showToast}</motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showBlocked && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[75] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
+            onClick={() => setShowBlocked(false)}>
+            <motion.div initial={{ y: 260 }} animate={{ y: 0 }} exit={{ y: 260 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md bg-surface-container-lowest rounded-t-[2rem] sm:rounded-[2rem] p-6">
+              <div className="w-12 h-1.5 bg-surface-variant rounded-full mx-auto mb-6" />
+              <h2 className="font-headline-md text-xl font-bold mb-1">Blocked Users</h2>
+              <p className="text-secondary text-sm mb-5">Blocked people cannot send requests or messages.</p>
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                {Backend.blocked.getAll().length ? Backend.blocked.getAll().map(blocked => (
+                  <div key={blocked.id} className="flex items-center justify-between bg-surface-container-low rounded-2xl px-4 py-3">
+                    <div>
+                      <p className="font-label-bold text-sm">{blocked.name}</p>
+                      <p className="text-[11px] text-secondary">Blocked {Backend.timeAgo(blocked.blockedAt)}</p>
+                    </div>
+                    <button onClick={() => { Backend.blocked.remove(blocked.id); FirebaseSync.unblockUser(user.uid, blocked.id); setBlockedCount(Backend.blocked.count()); }}
+                      className="text-primary-container text-sm font-label-bold">Unblock</button>
+                  </div>
+                )) : (
+                  <div className="py-10 text-center text-secondary text-sm">No blocked users.</div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -205,7 +256,7 @@ export default function Settings() {
           <Row icon="wifi_off" label="Hide Online Status" toggle toggleValue={toggles.hideOnline} onToggle={() => toggle('hideOnline')} />
           <Row icon="visibility_off" label="Invisible Story Viewing" toggle toggleValue={toggles.invisStory} onToggle={() => toggle('invisStory')} />
           <Row icon="lock" label="Private Account" subtitle="Only approved followers can see" toggle toggleValue={toggles.privateAccount} onToggle={() => toggle('privateAccount')} />
-          <Row icon="block" label="Blocked Users" value="0" onClick={() => toast('No blocked users')} />
+          <Row icon="block" label="Blocked Users" value={String(blockedCount)} onClick={() => setShowBlocked(true)} />
           <Row icon="volume_off" label="Muted Users" value="0" onClick={() => toast('No muted users')} />
           <Row icon="group" label="Close Friends" onClick={() => toast('Close Friends list coming soon')} />
         </Section>
@@ -213,7 +264,7 @@ export default function Settings() {
         {/* Chat Settings */}
         <Section icon="chat" title="Chat Settings">
           <Row icon="wallpaper" label="Chat Wallpapers" onClick={() => toast('Wallpaper picker coming soon')} />
-          <Row icon="mark_chat_unread" label="Message Requests" value="0" onClick={() => toast('No message requests')} />
+          <Row icon="mark_chat_unread" label="Message Requests" onClick={() => navigate('/requests')} />
           <Row icon="timer" label="Disappearing Messages" toggle toggleValue={toggles.disappearing} onToggle={() => toggle('disappearing')} />
           <Row icon="download" label="Auto-Download Media" toggle toggleValue={toggles.autoDownload} onToggle={() => toggle('autoDownload')} />
         </Section>
@@ -240,8 +291,8 @@ export default function Settings() {
 
         {/* Data & Storage */}
         <Section icon="storage" title="Data & Storage">
-          <Row icon="cached" label="Clear Cache" onClick={() => toast('Cache cleared ✓')} />
-          <Row icon="folder" label="Storage Used" value="12.4 MB" onClick={() => toast('Storage details coming soon')} />
+          <Row icon="cached" label="Clear Cache" onClick={() => { Backend.data.clearCache(); setStorageUsed(Backend.data.formatSize(Backend.data.getStorageUsed())); toast('Cache cleared'); }} />
+          <Row icon="folder" label="Storage Used" value={storageUsed} onClick={() => toast(`Local MisCom data: ${storageUsed}`)} />
           <Row icon="speed" label="Network Usage" value="Low" onClick={() => toast('Network stats coming soon')} />
         </Section>
 

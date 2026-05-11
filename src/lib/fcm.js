@@ -3,16 +3,20 @@ import { doc, updateDoc }                    from 'firebase/firestore';
 import { db } from './firebase';
 import FirebaseSync from './firebase';
 
-// Use the VAPID key from environment or a placeholder
-const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || 'BF_DUMMY_VAPID_KEY_REPLACE_ME';
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 let messaging = null;
 
 // Call this once after the user logs in and has completed onboarding
 export async function registerFCMToken(uid) {
-  if (!FirebaseSync.isReady()) return;
+  if (!FirebaseSync.isReady() || !VAPID_KEY) return;
   try {
     messaging = getMessaging();
+    const registration = await navigator.serviceWorker?.ready;
+    const firebaseConfig = FirebaseSync.getConfig();
+    if (registration && firebaseConfig) {
+      registration.active?.postMessage({ type: 'FIREBASE_CONFIG', config: firebaseConfig });
+    }
 
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
@@ -20,7 +24,7 @@ export async function registerFCMToken(uid) {
       return;
     }
 
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
     if (!token) return;
 
     // Save to Firestore so Cloud Function can read it

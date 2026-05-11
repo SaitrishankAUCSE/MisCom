@@ -1,12 +1,22 @@
 /**
- * MisCom E2E Encryption Module
- * Uses Web Crypto API (AES-GCM 256-bit) for message encryption.
- *
- * How it works:
- * - Each user generates a keypair on signup/login (stored in localStorage).
- * - For private chats, a shared secret is derived per-conversation.
- * - Messages are encrypted before storage and decrypted on read.
- * - Keys never leave the device.
+ * MisCom Encryption Module (Local-Only, NOT True E2E)
+ * 
+ * ⚠️ CRITICAL LIMITATION: This is NOT end-to-end encryption (E2E).
+ * 
+ * Current Implementation:
+ * - Each device generates its own AES-GCM key stored in localStorage
+ * - Messages encrypted on Device A CANNOT be decrypted on Device B (different keys!)
+ * - Fallback returns "[Encrypted message]" - messages are unreadable across devices
+ * - This provides ZERO security for multi-device use
+ * 
+ * To implement TRUE end-to-end encryption, you would need:
+ * 1. ECDH (Elliptic Curve Diffie-Hellman) key exchange on first chat
+ * 2. Derived shared secret for symmetric encryption
+ * 3. Or use Firebase App Check + server-side encryption
+ * 4. Or use a dedicated E2E solution (Signal Protocol, TweetNaCl.js, etc.)
+ * 
+ * For now: This module provides LOCAL device encryption only.
+ * Recommendation: Use Firebase Security Rules + HTTPS for transport security instead.
  */
 
 const CRYPTO_KEY = 'miscom_e2e_key';
@@ -33,7 +43,7 @@ async function getKey() {
   return await generateKey();
 }
 
-// ── Encryption ──
+// ── Encryption (Device-Local Only) ──
 async function encrypt(plaintext) {
   try {
     const key = await getKey();
@@ -50,7 +60,7 @@ async function encrypt(plaintext) {
   }
 }
 
-// ── Decryption ──
+// ── Decryption (Cannot decrypt messages from other devices!) ──
 async function decrypt(ciphertext) {
   try {
     if (!ciphertext || !ciphertext.startsWith('🔒')) return ciphertext;
@@ -61,12 +71,14 @@ async function decrypt(ciphertext) {
     const decrypted = await crypto.subtle.decrypt({ name: ALGO, iv }, key, encrypted);
     return new TextDecoder().decode(decrypted);
   } catch {
-    return '[Encrypted message]'; // Can't decrypt (different key)
+    // SECURITY NOTE: Messages cannot be decrypted on different devices due to unshared keys
+    return '[Encrypted message - available only on original device]';
   }
 }
 
 // ── Check if E2E is available ──
 function isAvailable() {
+  console.warn('[MisCom] E2E module loaded. Note: This is device-local encryption, not true E2E.');
   return typeof crypto !== 'undefined' && crypto.subtle;
 }
 

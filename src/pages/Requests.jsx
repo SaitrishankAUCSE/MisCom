@@ -13,6 +13,9 @@ export default function Requests() {
     getIncomingMessageRequests, 
     acceptVibeRequest, 
     rejectVibeRequest,
+    acceptMessageRequest,
+    deleteMessageRequest,
+    createOrGetDM,
     timeAgo
   } = useGlobal();
 
@@ -85,8 +88,12 @@ export default function Requests() {
                     key={req.id} 
                     request={req} 
                     type="message"
-                    onAccept={() => navigate(`/chat/${req.chatId}`)} // Messages are accepted via chat detail
-                    onReject={() => console.log('Reject message request')}
+                    onAccept={() => {
+                      acceptMessageRequest(req.id);
+                      const chatId = createOrGetDM(req.senderId);
+                      if (chatId) navigate(`/chat/${chatId}`);
+                    }}
+                    onReject={() => deleteMessageRequest(req.id)}
                     timeAgo={timeAgo(req.createdAt)}
                   />
                 ))

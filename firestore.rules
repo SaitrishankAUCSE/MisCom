@@ -8,10 +8,12 @@ service cloud.firestore {
     function isParticipant(chatId) {
       return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
     }
+    function hasBlocked(ownerUid, targetUid) {
+      return exists(/databases/$(database)/documents/blocked_users/$(ownerUid)) &&
+        targetUid in get(/databases/$(database)/documents/blocked_users/$(ownerUid)).data.blocked;
+    }
     function isNotBlocked(uid) {
-      // Check if current user is blocked by target user or vice versa
-      // (This requires a specific path or data field in the request)
-      return true; // Simplified for basic rules, but enforced in backend logic
+      return !hasBlocked(request.auth.uid, uid) && !hasBlocked(uid, request.auth.uid);
     }
 
     // ─── USERS ────────────────────────────────────────────────────────────
@@ -28,14 +30,18 @@ service cloud.firestore {
     // ─── VIBE REQUESTS (Connections) ──────────────────────────────────────
     match /vibe_requests/{reqId} {
       allow read: if isAuth() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
-      allow create: if isAuth() && request.resource.data.from == request.auth.uid;
+      allow create: if isAuth() &&
+        request.resource.data.from == request.auth.uid &&
+        isNotBlocked(request.resource.data.to);
       allow update, delete: if isAuth() && (request.auth.uid == resource.data.to || request.auth.uid == resource.data.from);
     }
 
     // ─── MESSAGE REQUESTS ─────────────────────────────────────────────────
     match /message_requests/{reqId} {
       allow read: if isAuth() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.receiverId);
-      allow create: if isAuth() && request.resource.data.senderId == request.auth.uid;
+      allow create: if isAuth() &&
+        request.resource.data.senderId == request.auth.uid &&
+        isNotBlocked(request.resource.data.receiverId);
       allow update, delete: if isAuth() && (request.auth.uid == resource.data.receiverId || request.auth.uid == resource.data.senderId);
     }
 
@@ -56,19 +62,28 @@ service cloud.firestore {
     // ─── TYPING STATUS ────────────────────────────────────────────────────
     match /typing_status/{chatId} {
       allow read: if isAuth() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-      allow write: if isAuth(); // Updated by any participant
+      allow create: if isAuth() &&
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+        request.resource.data.keys().hasOnly([request.auth.uid]);
+      allow update: if isAuth() &&
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([request.auth.uid]);
+      allow delete: if false;
     }
 
     // ─── READ RECEIPTS ────────────────────────────────────────────────────
     match /read_receipts/{msgId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
+      allow read, write: if false;
     }
 
     // ─── NOTIFICATIONS ────────────────────────────────────────────────────
-    match /notifications/{uid}/{document=**} {
-      allow read: if isOwner(uid);
-      allow write: if isAuth();
+    match /notifications/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /user_notifs/{notifId} {
+        allow read, update, delete: if isOwner(uid);
+        allow create: if false;
+      }
     }
 
     // ─── BLOCKED USERS ────────────────────────────────────────────────────
@@ -76,10 +91,37 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
+    // ─── FRIENDS ──────────────────────────────────────────────────────────
+    // Friends list: each user has a document with their friends array
+    match /friends/{uid} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) &&
+        request.resource.data.keys().hasOnly(['friends']) &&
+        request.resource.data.friends is list;
+      allow delete: if isOwner(uid);
+    }
+
+    // ─── FRIEND REQUESTS ──────────────────────────────────────────────────
+    // Friend requests: can be created by any auth user, updated/deleted by participants
+    match /friend_requests/{reqId} {
+      allow read: if isAuth() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+      allow create: if isAuth() &&
+        request.resource.data.from == request.auth.uid &&
+        isNotBlocked(request.resource.data.to);
+      allow update, delete: if isAuth() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+    }
+
     // ─── MEDIA UPLOADS TRACKING ───────────────────────────────────────────
     match /media_uploads/{uploadId} {
       allow read: if isAuth();
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /reports/{reportId} {
+      allow create: if isAuth() &&
+        request.resource.data.reporterId == request.auth.uid &&
+        request.resource.data.reportedUserId is string;
+      allow read, update, delete: if request.auth.token.admin == true;
     }
   }
 }

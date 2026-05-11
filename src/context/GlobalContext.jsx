@@ -281,10 +281,12 @@ export function GlobalProvider({ children }) {
       }
     }
     logout();
-    localStorage.clear(); 
+    Object.keys(localStorage)
+      .filter(key => key.startsWith('miscom_'))
+      .forEach(key => localStorage.removeItem(key));
     setUser(null);
     setProfile(null);
-    window.location.href = '/auth-choice';
+    window.location.assign('/auth-choice');
   };
 
   const isAuthenticated = !!user;
@@ -339,15 +341,25 @@ export function GlobalProvider({ children }) {
   }, [user, socialVersion]);
 
   const acceptMessageRequest = useCallback((chatId) => {
+    if (String(chatId).startsWith('mr-')) {
+      Backend.social.acceptMessageRequest(user?.uid, chatId);
+      setSocialVersion(v => v + 1);
+      return true;
+    }
     const success = Backend.chats.acceptMessageRequest(chatId);
     if (success) refreshChats();
     return success;
-  }, [refreshChats]);
+  }, [refreshChats, user?.uid]);
 
   const deleteMessageRequest = useCallback((chatId) => {
+    if (String(chatId).startsWith('mr-')) {
+      Backend.social.rejectMessageRequest(user?.uid, chatId);
+      setSocialVersion(v => v + 1);
+      return;
+    }
     Backend.chats.deleteMessageRequest(chatId);
     refreshChats();
-  }, [refreshChats]);
+  }, [refreshChats, user?.uid]);
 
   const [vibeRequests, setVibeRequests] = useState([]);
 

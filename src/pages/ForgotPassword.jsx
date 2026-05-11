@@ -39,7 +39,7 @@ export default function ForgotPassword() {
     try {
       const res = await Backend.auth.requestPasswordReset(identifier);
       setResetEmail(res.email);
-      setStep(2);
+      setStep(4);
       setTimeLeft(120);
       setOtp(['', '', '', '', '', '']);
     } catch (err) {
@@ -349,8 +349,8 @@ export default function ForgotPassword() {
                 className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
                 <span className="material-symbols-outlined text-white text-5xl">check_circle</span>
               </motion.div>
-              <h1 className="font-display text-4xl font-bold tracking-tight mb-4">Password Updated!</h1>
-              <p className="text-secondary text-base mb-10 max-w-[280px]">Your password has been successfully reset. You can now log in securely.</p>
+              <h1 className="font-display text-4xl font-bold tracking-tight mb-4">Check your email</h1>
+              <p className="text-secondary text-base mb-10 max-w-[280px]">We sent password reset instructions to <span className="font-bold text-on-background">{resetEmail}</span>.</p>
               
               <motion.button onClick={() => navigate('/login')} whileTap={{ scale: 0.97 }}
                 className="w-full max-w-[240px] bg-on-background text-white rounded-[2rem] py-4 font-bold text-lg shadow-xl transition-all">
