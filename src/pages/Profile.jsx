@@ -7,10 +7,13 @@ import Avatar from '../components/Avatar';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, profile, logout, updateProfile, music, addToQueue, permissions, requestMicrophone, requestContacts } = useGlobal();
+  const { user, profile, logout, updateProfile, music, addToQueue, permissions, requestMicrophone, requestContacts, refreshProfile } = useGlobal();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showEditAura, setShowEditAura] = useState(false);
   const [showToast, setShowToast] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedBio, setEditedBio] = useState(profile?.bio || '');
+  const [uploading, setUploading] = useState(false);
 
   const AURA_OPTIONS = ['🔥 On Fire', '🎧 Vibing', '🌙 Relaxing', '🎮 Gaming', '✨ Creating', '💭 Thinking'];
 
@@ -24,6 +27,37 @@ export default function Profile() {
     setShowEditAura(false);
     setShowToast('Aura updated! ' + aura);
     setTimeout(() => setShowToast(''), 2000);
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !user) return;
+    
+    setUploading(true);
+    try {
+      const { storage } = await import('../lib/firebase');
+      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      
+      const avatarRef = ref(storage, `avatars/${user.uid}`);
+      await uploadBytes(avatarRef, file);
+      const url = await getDownloadURL(avatarRef);
+      
+      await updateProfile({ avatar: url });
+      setShowToast('Profile picture updated! ✨');
+    } catch (err) {
+      console.error(err);
+      setShowToast('Failed to upload image');
+    } finally {
+      setUploading(false);
+      setTimeout(() => setShowToast(''), 2500);
+    }
+  };
+
+  const handleSave = async () => {
+    await updateProfile({ bio: editedBio });
+    setIsEditing(false);
+    setShowToast('Profile updated! ✨');
+    setTimeout(() => setShowToast(''), 2500);
   };
 
   const handleAddToQueue = () => {
@@ -62,35 +96,72 @@ export default function Profile() {
         {/* Profile Card */}
         <section className="text-center space-y-4">
           <div className="relative inline-block">
-            <Avatar 
-              src={user?.avatar || profile?.avatar} 
-              alt={profile?.displayName || user?.name} 
-              size="xl" 
-              border={true}
-              online={true}
-              showStatus={true}
-            />
+            <div className={`relative ${uploading ? 'opacity-50' : ''}`}>
+              <Avatar 
+                src={profile?.avatar} 
+                alt={profile?.displayName || user?.name} 
+                size="xl" 
+                border={true}
+                online={true}
+                showStatus={true}
+              />
+              {uploading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 border-4 border-primary-container/30 border-t-primary-container rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            
+            <label className="absolute -bottom-1 -right-1 w-10 h-10 rounded-full bg-primary-container text-white flex items-center justify-center shadow-lg cursor-pointer hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-[20px]">photo_camera</span>
+              <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} disabled={uploading} />
+            </label>
+          </div>
+          
+          <div className="space-y-1">
+            <h1 className="font-display text-3xl font-bold">{profile?.displayName || user?.name || 'Alex'}</h1>
+            <p className="text-secondary text-sm">@{profile?.username || user?.username}</p>
+          </div>
+          
+          <div className="flex justify-center gap-2">
             <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => navigate('/profile-setup')}
-              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary-container text-white flex items-center justify-center shadow-lg text-sm"
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowEditAura(true)}
+              className="bg-surface-container-low text-on-surface px-4 py-2 rounded-full font-label-bold text-sm inline-flex items-center gap-2 hover:bg-surface-container-high transition-colors"
             >
-              <span className="material-symbols-outlined text-[16px]">edit</span>
+              {profile?.aura || '🔥 On Fire'} <span className="material-symbols-outlined text-[14px]">expand_more</span>
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => { setIsEditing(!isEditing); if(!isEditing) setEditedBio(profile?.bio || ''); }}
+              className={`px-4 py-2 rounded-full font-label-bold text-sm inline-flex items-center gap-2 transition-colors ${isEditing ? 'bg-primary-container text-white' : 'bg-surface-container-low text-on-surface hover:bg-surface-container-high'}`}
+            >
+              <span className="material-symbols-outlined text-[16px]">{isEditing ? 'check' : 'edit'}</span>
+              {isEditing ? 'Finish' : 'Edit Bio'}
             </motion.button>
           </div>
           
-          <h1 className="font-display text-3xl font-bold">{profile?.displayName || user?.name || 'Alex'}</h1>
-          <p className="text-secondary text-sm">@{profile?.username || user?.username}</p>
-          
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowEditAura(true)}
-            className="bg-primary-container/10 text-primary-container px-4 py-2 rounded-full font-label-bold text-sm inline-flex items-center gap-2 hover:bg-primary-container/20 transition-colors"
-          >
-            {user?.aura || '🔥 On Fire'} <span className="material-symbols-outlined text-[14px]">expand_more</span>
-          </motion.button>
-          
-          {user?.bio && <p className="text-secondary text-sm max-w-xs mx-auto">{user.bio}</p>}
+          <AnimatePresence mode="wait">
+            {isEditing ? (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="max-w-xs mx-auto">
+                <textarea
+                  value={editedBio}
+                  onChange={e => setEditedBio(e.target.value)}
+                  placeholder="Tell the world your vibe..."
+                  rows={3}
+                  className="w-full bg-surface-container-lowest border-2 border-primary-container/20 rounded-2xl px-4 py-3 outline-none focus:border-primary-container transition-all resize-none text-center text-sm"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button onClick={handleSave} className="flex-1 bg-primary-container text-white py-2 rounded-xl font-label-bold text-xs">Save Bio</button>
+                  <button onClick={() => setIsEditing(false)} className="flex-1 bg-surface-container-high py-2 rounded-xl font-label-bold text-xs">Cancel</button>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-secondary text-sm max-w-xs mx-auto italic">
+                {profile?.bio || 'No bio yet. Tap edit to share your vibe.'}
+              </motion.p>
+            )}
+          </AnimatePresence>
         </section>
 
         {/* Stats */}

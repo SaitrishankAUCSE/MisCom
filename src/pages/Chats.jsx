@@ -153,35 +153,40 @@ export default function Chats() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-1">
-                      <h3 className="font-headline-md text-[16px] font-bold truncate">{viewingRequests ? (chat.senderName || chat.name) : chat.name}</h3>
-                      <span className="font-label-sm text-label-sm text-on-surface-variant shrink-0 ml-2">{timeAgo(chat.lastMessageTime)}</span>
-                    </div>
-                    <p className={`font-body-md text-[14px] truncate ${chat.typing ? 'text-primary-container animate-pulse italic' : 'text-on-surface-variant'}`}>
-                      {chat.typing ? 'vibing...' : (viewingRequests ? '✦ Wants to vibe with you' : chat.lastMessage)}
-                    </p>
-                  </div>
-                  {(() => {
-                    // Try to get unread count from chat_meta (server-side)
-                    let unread = chat.unreadCounts?.[user?.uid] || chat.unread || 0;
-                    
-                    // Fallback: Check notification feed for unread DMs if count is 0
-                    if (unread === 0 && !viewingRequests) {
-                      const allNotifs = JSON.parse(localStorage.getItem('miscom_notifs') || '[]');
-                      unread = allNotifs.filter(n => !n.read && n.chatId === chat.id).length;
-                    }
+                    {(() => {
+                      // Calculate unread count early to use for styling
+                      let unread = chat.unreadCounts?.[user?.uid] || chat.unread || 0;
+                      if (unread === 0 && !viewingRequests) {
+                        const allNotifs = JSON.parse(localStorage.getItem('miscom_notifs') || '[]');
+                        unread = allNotifs.filter(n => !n.read && n.chatId === chat.id).length;
+                      }
+                      
+                      const isUnread = unread > 0;
 
-                    if (unread > 0) {
                       return (
-                        <div className="ml-4">
-                          <div className="w-6 h-6 bg-primary-container rounded-full flex items-center justify-center font-label-sm text-[10px] text-on-primary shadow-sm font-bold animate-pulse">
-                            {unread}
+                        <>
+                          <div className="flex justify-between items-baseline mb-1">
+                            <h3 className={`font-headline-md text-[16px] truncate ${isUnread ? 'font-black' : 'font-bold'}`}>
+                              {viewingRequests ? (chat.senderName || chat.name) : chat.name}
+                            </h3>
+                            <span className="font-label-sm text-label-sm text-on-surface-variant shrink-0 ml-2">{timeAgo(chat.lastTimestamp || chat.lastMessageTime)}</span>
                           </div>
-                        </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`font-body-md text-[14px] truncate flex-1 ${chat.typing ? 'text-primary-container animate-pulse italic' : (isUnread ? 'text-on-surface font-bold' : 'text-on-surface-variant')}`}>
+                              {chat.typing ? 'vibing...' : (viewingRequests ? '✦ Wants to vibe with you' : chat.lastMessage)}
+                            </p>
+                            {isUnread && (
+                              <div className="shrink-0 ml-2">
+                                <div className="w-5 h-5 bg-primary-container rounded-full flex items-center justify-center font-label-sm text-[10px] text-on-primary shadow-sm font-bold animate-pulse">
+                                  {unread}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
                       );
-                    }
-                    return null;
-                  })()}
+                    })()}
+                  </div>
                 </motion.div>
               </motion.div>
             ))}
