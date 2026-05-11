@@ -375,22 +375,42 @@ const FirebaseSync = {
       // Merge into local chats
       const localChats = JSON.parse(localStorage.getItem('miscom_chats') || '[]');
       let changed = false;
+      let newToast = null;
       
       myChats.forEach(rc => {
         const existingIdx = localChats.findIndex(lc => lc.id === rc.id);
         if (existingIdx !== -1) {
+          const old = localChats[existingIdx];
+          // Check if there is a new message from someone else
+          if (rc.lastMessageTime > old.lastMessageTime && rc.lastSenderId !== uid) {
+            newToast = {
+              title: rc.senderName || rc.name || 'New Message',
+              body: rc.lastMessage,
+              avatar: rc.senderAvatar || rc.avatar,
+              link: `/chat/${rc.id}`,
+            };
+          }
           // Update existing chat with Firebase data
-          localChats[existingIdx] = { ...localChats[existingIdx], ...rc };
+          localChats[existingIdx] = { ...old, ...rc };
         } else {
           // New chat from Firebase — add it
           localChats.unshift(rc);
           changed = true;
+          // Check if it's a new vibe request directed at us
+          if (rc.isRequest && !rc.requestAccepted && rc.requestFrom !== uid) {
+            newToast = {
+              title: 'New Vibe Request',
+              body: `${rc.senderName || rc.name || 'Someone'} wants to vibe with you`,
+              avatar: rc.senderAvatar || rc.avatar,
+              link: `/chats`,
+            };
+          }
         }
       });
       
       if (changed || myChats.length > 0) {
         localStorage.setItem('miscom_chats', JSON.stringify(localChats));
-        if (onUpdate) onUpdate();
+        if (onUpdate) onUpdate(newToast);
       }
     });
 

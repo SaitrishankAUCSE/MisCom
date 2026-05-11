@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 
 import Splash from './pages/Splash';
@@ -58,10 +58,48 @@ const BOTTOM_NAV_PATHS = ['/home', '/chats', '/discover', '/secret-spaces', '/vi
 
 function AppRoutes() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { globalToast, setGlobalToast } = useGlobal();
   const showBottomNav = BOTTOM_NAV_PATHS.includes(location.pathname);
 
   return (
     <div className="relative min-h-screen bg-background">
+      {/* Global In-App Notification Toast */}
+      <AnimatePresence>
+        {globalToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 16, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            className="fixed top-0 left-4 right-4 z-[100] cursor-pointer"
+            onClick={() => {
+              setGlobalToast(null);
+              if (globalToast.link) navigate(globalToast.link);
+            }}
+          >
+            <div className="bg-surface-container-high/90 backdrop-blur-xl border border-on-background/10 rounded-2xl p-4 shadow-2xl flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant ring-2 ring-primary-container/20 shrink-0">
+                {globalToast.avatar ? (
+                  <img src={globalToast.avatar} alt="Sender" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="material-symbols-outlined text-secondary text-xl">person</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-label-bold text-[15px] text-on-surface truncate">{globalToast.title}</h4>
+                <p className="font-body-sm text-[13px] text-on-surface-variant truncate mt-0.5">{globalToast.body}</p>
+              </div>
+              <div className="shrink-0 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary-container animate-pulse">new_releases</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           {/* Public */}

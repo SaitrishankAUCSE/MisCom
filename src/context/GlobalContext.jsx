@@ -16,6 +16,8 @@ export function GlobalProvider({ children }) {
   const [permissions, setPermissions] = useState({ microphone: false, contacts: false });
   const [socialVersion, setSocialVersion] = useState(0);
 
+  const [globalToast, setGlobalToast] = useState(null);
+
   // ── Init: restore session ──
   useEffect(() => {
     Backend.init();
@@ -33,10 +35,22 @@ export function GlobalProvider({ children }) {
 
     // ── Start Realtime Sync ──
     if (FirebaseSync.isReady()) {
-      const unsub = FirebaseSync.startRealtimeSync(saved?.uid, () => {
+      const unsub = FirebaseSync.startRealtimeSync(saved?.uid, (toastPayload) => {
         // Force refresh components that rely on local storage
         if (saved) setUser({ ...Backend.auth.getSession() });
         setSocialVersion(v => v + 1);
+        refreshAll();
+        
+        // Show in-app notification if we got a payload and we aren't already looking at it
+        if (toastPayload) {
+          // If we are already on the chat page for this message, don't show the toast
+          const isCurrentChat = window.location.pathname === toastPayload.link;
+          if (!isCurrentChat) {
+            setGlobalToast(toastPayload);
+            // Auto hide after 4 seconds
+            setTimeout(() => setGlobalToast(null), 4000);
+          }
+        }
       });
       return () => unsub();
     }
@@ -270,6 +284,7 @@ export function GlobalProvider({ children }) {
       music, toggleMusic, skipTrack, joinMusicSession, addToQueue,
       notifications, unreadNotifCount, markNotificationsRead, markNotificationRead,
       getInsights, timeAgo: Backend.timeAgo, socialVersion,
+      globalToast, setGlobalToast
     }}>
       {children}
     </GlobalContext.Provider>
