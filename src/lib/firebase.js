@@ -33,9 +33,9 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyALsXuYdXkuOAMHgaM6Ap8M5HW3nmZwbzE",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "miscom-app.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "miscom-app",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "miscom-app.firebasestorage.app",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "amerox-airdrop.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "amerox-airdrop",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "amerox-airdrop.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "524446179930",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:524446179930:web:88834cfdf4f12f12742e63",
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-2X5F7322PM"
@@ -486,6 +486,19 @@ const FirebaseSync = {
       throw e;
     }
   },
+
+  async globalNuke(secret) {
+    if (!firebaseReady) return;
+    try {
+      const functions = getFunctions();
+      const nukeFn = httpsCallable(functions, 'globalNuke');
+      const result = await nukeFn({ secret });
+      return result.data;
+    } catch (e) { 
+      console.error('Global nuke error:', e); 
+      throw e; 
+    }
+  }
 };
 
 export { auth, db, googleProvider, FirebaseSync };

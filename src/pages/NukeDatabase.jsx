@@ -62,32 +62,53 @@ export default function NukeDatabase() {
     wipe();
   }, [logout, user?.uid]);
 
+  const handleCloudNuke = async () => {
+    const secret = prompt('Enter Secret Nuke Key:');
+    if (secret === 'MISCOM_NUKE_2026') {
+      setStatus('🚀 TRIGERRED GLOBAL NUKE... Please wait...');
+      try {
+        await FirebaseSync.globalNuke(secret);
+        setStatus('✨ TOTAL PROJECT WIPE COMPLETE. Zero users exist globally.');
+        setTimeout(() => logout(), 2000);
+      } catch (err) {
+        setStatus(`❌ Cloud Nuke Failed: ${err.message}`);
+      }
+    } else if (secret) {
+      alert('Invalid secret key.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 text-center font-body-md">
-      <span className="material-symbols-outlined text-error text-6xl mb-6">warning</span>
-      <h1 className="text-3xl font-display font-bold mb-4">Database Nuked</h1>
+      <span className="material-symbols-outlined text-error text-6xl mb-6 animate-pulse">warning</span>
+      <h1 className="text-3xl font-display font-bold mb-4">Nuclear Reset Center</h1>
       <p className="text-gray-300 mb-8 max-w-md">
         {status}
       </p>
 
-      <div className="bg-surface-container-highest p-6 rounded-2xl max-w-md text-left mb-8 border border-error/20">
-        <h2 className="text-error font-bold mb-2">⚠️ Action Required</h2>
-        <p className="text-sm text-gray-300 mb-4">
-          To completely remove all users from production, you must also clear your Firebase Console:
-        </p>
-        <ol className="list-decimal pl-5 text-sm text-gray-300 space-y-2">
-          <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer" className="text-primary-container hover:underline">console.firebase.google.com</a></li>
-          <li>Select your project (<strong>amerox-airdrop</strong>)</li>
-          <li>Go to <strong>Authentication &gt; Users</strong></li>
-          <li>Click the three dots at the top right and select <strong>Delete all users</strong> (or select them manually).</li>
-          <li>Go to <strong>Firestore Database</strong> and delete the <code>users</code> collection.</li>
-        </ol>
+      <div className="flex flex-col gap-4 w-full max-w-md">
+        <button onClick={handleCloudNuke} 
+          className="bg-error text-white px-8 py-4 rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg flex items-center justify-center gap-2">
+          <span className="material-symbols-outlined">delete_forever</span>
+          Cloud Wipe (Auth + DB)
+        </button>
+
+        <button onClick={() => window.location.href = '/'} 
+          className="bg-surface-container-highest text-on-surface px-8 py-4 rounded-2xl font-bold hover:bg-surface-variant transition-colors">
+          Return to App
+        </button>
       </div>
 
-      <button onClick={() => window.location.href = '/'} 
-        className="bg-primary-container text-white px-8 py-3 rounded-full font-bold hover:bg-primary-fixed-dim transition-colors">
-        Return to App
-      </button>
+      <div className="mt-12 bg-surface-container-highest p-6 rounded-2xl max-w-md text-left border border-error/20">
+        <h2 className="text-error font-bold mb-2 flex items-center gap-2">
+          <span className="material-symbols-outlined text-sm">info</span>
+          Admin Instructions
+        </h2>
+        <p className="text-sm text-gray-300 mb-4">
+          The <strong>Cloud Wipe</strong> button uses a server-side Cloud Function to delete ALL Auth records and ALL Firestore data.
+        </p>
+        <p className="text-[10px] text-gray-500 uppercase font-bold">Secret Key: MISCOM_NUKE_2026</p>
+      </div>
     </div>
   );
 }

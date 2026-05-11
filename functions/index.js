@@ -198,8 +198,53 @@ exports.deleteUserAccount = functions.https.onCall(async (data, context) => {
     await batch.commit();
     await auth.deleteUser(uid);
 
+    await batch.commit();
+    await auth.deleteUser(uid);
+
     return { success: true, message: 'Account wiped.' };
   } catch (error) {
     throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ─── Global Nuclear Reset (Emergency Only) ───────────────────────────────
+exports.globalNuke = functions.https.onCall(async (data, context) => {
+  // Only allow if the secret key matches
+  const { secret } = data;
+  if (secret !== 'MISCOM_NUKE_2026') {
+    throw new functions.https.HttpsError('permission-denied', 'Invalid secret key.');
+  }
+
+  console.log('🚀 [GLOBAL NUKE] Initiating total project wipe...');
+
+  try {
+    // 1. Wipe Auth Users
+    const wipeAuth = async (nextPageToken) => {
+      const result = await auth.listUsers(1000, nextPageToken);
+      const uids = result.users.map(u => u.uid);
+      if (uids.length > 0) await auth.deleteUsers(uids);
+      if (result.pageToken) await wipeAuth(result.pageToken);
+    };
+    await wipeAuth();
+    console.log('✅ Auth wiped.');
+
+    // 2. Wipe Firestore
+    const rootCollections = ['users', 'chats', 'chat_meta', 'notifications', 'friend_requests', 'friends', 'rooms', 'memories', 'online_status', 'typing_status'];
+    for (const colName of rootCollections) {
+      const snapshot = await db.collection(colName).get();
+      const batch = db.batch();
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
+    console.log('✅ Firestore wiped.');
+
+    // 3. Wipe Storage
+    const [files] = await storage.bucket().getFiles();
+    await Promise.all(files.map(file => file.delete()));
+    console.log('✅ Storage wiped.');
+
+    return { success: true, message: 'Project is now at absolute zero.' };
+  } catch (err) {
+    throw new functions.https.HttpsError('internal', err.message);
   }
 });
