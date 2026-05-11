@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import TopAppBar from '../components/TopAppBar';
 import { useGlobal } from '../context/GlobalContext';
 import Backend, { AVATARS } from '../lib/backend';
+import FirebaseSync from '../lib/firebase';
 
 export default function Discover() {
   const navigate = useNavigate();
@@ -15,6 +16,9 @@ export default function Discover() {
   const [friends, setFriends] = useState([]);
   const [toast, setToast] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
+  const [recentSearches, setRecentSearches] = useState(() => {
+    return JSON.parse(localStorage.getItem('miscom_recent_searches') || '[]');
+  });
 
   // Refresh when user changes OR when Firebase sync pushes new social data
   useEffect(() => { refreshData(); }, [user, socialVersion]);
@@ -29,43 +33,42 @@ export default function Discover() {
     if (!user) return;
     setRequests(Backend.social.getIncomingRequests(user.uid));
     setFriends(Backend.social.getFriends(user.uid));
-  };
+  };  const [searching, setSearching] = useState(false);
+  const [hasSearchedCloud, setHasSearchedCloud] = useState(false);
 
-  const [searching, setSearching] = useState(false);
-
+  // Search logic with debounce
   useEffect(() => {
-    if (query.length >= 2 && user) {
-      // First try local search
-      const localResults = Backend.social.searchUsers(query, user.uid);
-      setResults(localResults);
-      
-      // If local found nothing, try Firebase directly
-      if (localResults.length === 0) {
-        setSearching(true);
-        import('../lib/firebase').then(({ default: FirebaseSync }) => {
-          if (FirebaseSync.isReady()) {
-            FirebaseSync.searchUsers(query, user.uid).then(fbResults => {
-              if (fbResults.length > 0) {
-                // Deduplicate: normally we filter out current user, but keeping for now to verify data
-                const filtered = fbResults; // fbResults.filter(r => r.uid !== user.uid || r.username !== user.username);
-                setResults(prev => {
-                  const merged = [...prev];
-                  filtered.forEach(fr => {
-                    if (!merged.find(m => m.uid === fr.uid)) merged.push(fr);
-                  });
-                  return merged;
-                });
-              }
-              setSearching(false);
-            }).catch(() => setSearching(false));
-          } else {
-            setSearching(false);
-          }
-        });
-      }
-    } else {
+    if (query.length < 2) {
       setResults([]);
+      setSearching(false);
+      setHasSearchedCloud(false);
+      return;
     }
+
+    // 1. Instant local search for snappy feel
+    const localResults = Backend.social.searchUsers(query, user.uid);
+    setResults(localResults);
+
+    // 2. Debounced cloud search for global people
+    const timer = setTimeout(() => {
+      if (user && FirebaseSync.isReady()) {
+        setSearching(true);
+        FirebaseSync.searchUsers(query, user.uid).then(fbResults => {
+          setResults(prev => {
+            // Merge & Deduplicate
+            const merged = [...prev];
+            fbResults.forEach(fr => {
+              if (!merged.find(m => m.uid === fr.uid)) merged.push(fr);
+            });
+            return merged;
+          });
+          setHasSearchedCloud(true);
+          setSearching(false);
+        }).catch(() => setSearching(false));
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
   }, [query, user, socialVersion]);
 
   const handleConnect = (toId) => {
@@ -166,9 +169,16 @@ export default function Discover() {
     const { createOrGetDM } = useGlobal();
     
     const handleCardClick = () => {
-      if (u.uid === user.uid) return; // Can't message yourself
+      if (u.uid === user.uid) return;
       
-      // Instagram style: clicking a user goes to their DM. If not friends, it's a request.
+      // Save to recent searches
+      setRecentSearches(prev => {
+        const filtered = prev.filter(x => x.uid !== u.uid);
+        const updated = [{ uid: u.uid, username: u.username, name: u.name, avatar: u.avatar, aura: u.aura }, ...filtered].slice(0, 5);
+        localStorage.setItem('miscom_recent_searches', JSON.stringify(updated));
+        return updated;
+      });
+
       const chatId = createOrGetDM(u.uid);
       navigate(`/chat/${chatId}`);
     };
@@ -216,16 +226,17 @@ export default function Discover() {
         </div>
 
         {/* Search Results (overlay-style when searching) */}
-        {query.length >= 2 ? (
+        {query.length >= 1 ? (
           <div>
-            <h2 className="font-label-bold text-xs text-secondary uppercase tracking-wider mb-3">Search Results</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-label-bold text-xs text-secondary uppercase tracking-wider">Search Results</h2>
+              {searching && <div className="w-4 h-4 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin" />}
+            </div>
+            
             {results.length === 0 ? (
               <div className="text-center py-10">
                 {searching ? (
-                  <>
-                    <div className="w-8 h-8 border-2 border-primary-container/30 border-t-primary-container rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-secondary text-sm">Searching cloud...</p>
-                  </>
+                  <p className="text-secondary text-sm">Searching cloud...</p>
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-4xl text-surface-variant mb-2 block">person_search</span>
@@ -241,6 +252,28 @@ export default function Discover() {
           </div>
         ) : (
           <>
+            {/* Recent Searches (Instagram style) */}
+            {recentSearches.length > 0 && tab === 'discover' && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-label-bold text-xs text-secondary uppercase tracking-wider">Recent</h2>
+                  <button onClick={() => { setRecentSearches([]); localStorage.removeItem('miscom_recent_searches'); }} className="text-xs font-label-bold text-primary-container">Clear all</button>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                  {recentSearches.map((u) => (
+                    <div key={u.uid} onClick={() => navigate(`/chat/${user.uid < u.uid ? `chat-${user.uid}-${u.uid}` : `chat-${u.uid}-${user.uid}`}`)} 
+                      className="flex flex-col items-center gap-2 shrink-0 cursor-pointer">
+                      <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-variant ring-2 ring-primary-container/10 ring-offset-1">
+                        {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : (
+                          <div className="w-full h-full flex items-center justify-center"><span className="material-symbols-outlined text-secondary">person</span></div>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-label-bold max-w-[64px] truncate">@{u.username}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Tabs */}
             <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-hide">
               {[
