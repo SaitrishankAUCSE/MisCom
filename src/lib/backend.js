@@ -1154,7 +1154,15 @@ const Backend = {
       const users = get(KEYS.USERS, []);
       return friendIds.map(fid => {
         const u = users.find(x => x.uid === fid);
-        return u ? { uid: u.uid, username: u.username, name: u.name, avatar: u.avatar, aura: u.aura, bio: u.bio } : null;
+        return u ? { 
+          uid: u.uid, 
+          username: u.username, 
+          displayName: u.displayName || u.name || u.username,
+          name: u.name, 
+          avatar: u.avatar, 
+          aura: u.aura, 
+          bio: u.bio 
+        } : null;
       }).filter(Boolean);
     },
 

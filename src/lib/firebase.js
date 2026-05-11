@@ -384,12 +384,14 @@ const FirebaseSync = {
       if (onUpdate) onUpdate();
     });
 
-    // Sync all friends mapping
-    const unsubFriends = onSnapshot(collection(db, 'friends'), (snap) => {
-      const friendsData = {};
-      snap.docs.forEach(d => { friendsData[d.id] = d.data().friends || []; });
-      localStorage.setItem('miscom_friends', JSON.stringify(friendsData));
-      if (onUpdate) onUpdate();
+    // Sync current user's friends list
+    const unsubFriends = onSnapshot(doc(db, 'friends', uid), (snap) => {
+      if (snap.exists()) {
+        const friendsMap = JSON.parse(localStorage.getItem('miscom_friends') || '{}');
+        friendsMap[uid] = snap.data().friends || [];
+        localStorage.setItem('miscom_friends', JSON.stringify(friendsMap));
+        if (onUpdate) onUpdate();
+      }
     });
 
     // Sync chat metadata (vibe requests + active chats)
