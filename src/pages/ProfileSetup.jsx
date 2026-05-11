@@ -9,62 +9,59 @@ import Logo from '../components/Logo';
 
 export default function ProfileSetup() {
   const navigate = useNavigate();
-  const { user, setProfile, refreshProfile } = useGlobal();
+  const { user, profile, updateProfile, refreshProfile } = useGlobal();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Step 1: Username
-  const [username, setUsername] = useState('');
-  const [usernameStatus, setUsernameStatus] = useState('idle'); // idle, checking, available, taken, invalid
+  const [username, setUsername] = useState(profile?.username || '');
+  const [usernameStatus, setUsernameStatus] = useState('idle');
 
   // Step 2: Display Name & Bio
-  const [displayName, setDisplayName] = useState('');
-  const [bio, setBio] = useState('');
+  const [displayName, setDisplayName] = useState(profile?.displayName || '');
+  const [bio, setBio] = useState(profile?.bio || '');
 
   // Step 3: Avatar
   const [avatar, setAvatar] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(profile?.avatar || null);
 
   // Suggested username from email
   useEffect(() => {
-    if (user?.email && !username) {
+    if (user?.email && !username && !profile?.username) {
       const suggest = user.email.split('@')[0].replace(/[^a-z0-9_]/g, '').slice(0, 20).toLowerCase();
       setUsername(suggest);
     }
-  }, [user]);
+  }, [user, profile]);
 
   // Username validation (Strict)
   useEffect(() => {
     if (step !== 1) return;
     if (username.length < 3) { setUsernameStatus('idle'); return; }
+    if (username === profile?.username) { setUsernameStatus('available'); return; }
     
     setUsernameStatus('checking');
     const timer = setTimeout(async () => {
-      // 1. Client side check
       if (!/^[a-z0-9_]+$/.test(username)) {
         setUsernameStatus('invalid');
         return;
       }
-      // 2. Firestore check for uniqueness
       try {
         const q = query(collection(db, 'users'), where('username', '==', username));
         const snap = await getDocs(q);
         if (snap.empty) {
           setUsernameStatus('available');
         } else {
-          // Check if it's the current user's own username (though they shouldn't have one yet)
           const own = snap.docs.find(d => d.id === user?.uid);
           setUsernameStatus(own ? 'available' : 'taken');
         }
       } catch (err) {
-        console.error(err);
         setUsernameStatus('idle');
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [username, step, user?.uid]);
+  }, [username, step, user?.uid, profile?.username]);
 
   const handleNext = () => {
     if (step === 1 && usernameStatus !== 'available') return;
@@ -98,13 +95,12 @@ export default function ProfileSetup() {
         avatarUrl = await getDownloadURL(avatarRef);
       }
 
-      await updateDoc(doc(db, 'users', user.uid), {
+      await updateProfile({
         username: username.toLowerCase(),
         displayName: displayName.trim(),
         bio: bio.trim(),
         avatar: avatarUrl,
-        onboardingCompleted: true,
-        updatedAt: new Date().getTime()
+        onboardingCompleted: true
       });
 
       await refreshProfile();
