@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Backend from '../lib/backend';
-import FirebaseSync from '../lib/firebase';
+import FirebaseSync, { db } from '../lib/firebase';
 import { useGlobal } from '../context/GlobalContext';
+import { collection, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
 
 export default function NukeDatabase() {
   const navigate = useNavigate();
@@ -11,10 +12,7 @@ export default function NukeDatabase() {
 
   useEffect(() => {
     const wipe = async () => {
-      // 1. Log out the current user (clears session)
-      logout();
-
-      // 2. Clear all Local Storage items starting with 'miscom_'
+      // 1. Clear all Local Storage items starting with 'miscom_'
       const keys = Object.keys(localStorage);
       for (const key of keys) {
         if (key.startsWith('miscom_')) {
@@ -22,15 +20,47 @@ export default function NukeDatabase() {
         }
       }
 
-      // 3. Clear Firebase session
+      // 2. Clear Firestore Data (Deep Wipe)
+      if (FirebaseSync.isReady() && user?.uid) {
+        setStatus('Initiating deep cloud wipe...');
+        const rootCollections = ['users', 'chats', 'chat_meta', 'notifications', 'friend_requests', 'friends', 'rooms', 'memories'];
+        
+        for (const colName of rootCollections) {
+          try {
+            const snap = await getDocs(collection(db, colName));
+            console.log(`🔍 Checking ${colName} (${snap.size} docs)...`);
+            
+            for (const docSnap of snap.docs) {
+              // Handle known sub-collections
+              const subCollections = colName === 'chats' ? ['messages'] : (colName === 'rooms' ? ['messages', 'members'] : (colName === 'notifications' ? ['user_notifs'] : []));
+              
+              for (const subCol of subCollections) {
+                const subSnap = await getDocs(collection(db, colName, docSnap.id, subCol));
+                const subBatch = writeBatch(db);
+                subSnap.docs.forEach(d => subBatch.delete(d.ref));
+                await subBatch.commit();
+              }
+              
+              // Delete the root document
+              await deleteDoc(docSnap.ref);
+            }
+            console.log(`✅ Nuked collection: ${colName}`);
+          } catch (e) {
+            console.warn(`Could not nuke ${colName}:`, e.message);
+          }
+        }
+      }
+
+      // 4. Clear Firebase session
       if (FirebaseSync.isReady()) {
         await FirebaseSync.signOutUser().catch(() => {});
       }
 
-      setStatus('Local database successfully wiped! Zero users remaining locally.');
+      logout();
+      setStatus('Success! The database has been wiped clean. App is now at zero users.');
     };
     wipe();
-  }, [logout]);
+  }, [logout, user?.uid]);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 text-center font-body-md">
