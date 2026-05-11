@@ -56,14 +56,14 @@ const V = {
     if (/\s/.test(u)) return 'Username cannot contain spaces';
     if (!/^[A-Za-z0-9_]+$/.test(u)) return 'Only letters, numbers, and underscore allowed';
     const users = get(KEYS.USERS, []);
-    if (users.find(x => x.username.toLowerCase() === u.toLowerCase())) return 'Username is already taken';
+    if (users.find(x => (x.username || '').toLowerCase() === (u || '').toLowerCase())) return 'Username is already taken';
     return null;
   },
   email(e) {
     if (!e) return 'Email is required';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return 'Invalid email format';
     const users = get(KEYS.USERS, []);
-    if (users.find(x => x.email.toLowerCase() === e.toLowerCase())) return 'Email is already registered';
+    if (users.find(x => (x.email || '').toLowerCase() === (e || '').toLowerCase())) return 'Email is already registered';
     return null;
   },
   password(p) {
@@ -148,8 +148,8 @@ const Backend = {
             if (pErr) return reject(new Error(pErr));
 
             const users = get(KEYS.USERS, []);
-            if (users.find(u => u.email === email.toLowerCase())) return reject(new Error('Email already registered'));
-            if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) return reject(new Error('Username taken'));
+            if (users.find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase())) return reject(new Error('Email already registered'));
+            if (users.find(u => (u.username || '').toLowerCase() === (username || '').toLowerCase())) return reject(new Error('Username taken'));
 
             const newUser = {
               uid: uid(), username, email: email.toLowerCase(),
