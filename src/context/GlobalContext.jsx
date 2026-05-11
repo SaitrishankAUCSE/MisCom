@@ -303,19 +303,34 @@ export function GlobalProvider({ children }) {
 
   const getIncomingMessageRequests = useCallback(() => {
     if (!user) return [];
-    return Backend.chats.getIncomingMessageRequests(user.uid);
-  }, [user, chats]);
+    return JSON.parse(localStorage.getItem('miscom_message_requests') || '[]')
+      .filter(r => r.receiverId === user.uid && r.status === 'pending');
+  }, [user, socialVersion]);
 
-  const acceptMessageRequest = useCallback((chatId) => {
-    const success = Backend.chats.acceptMessageRequest(chatId);
-    if (success) refreshChats();
-    return success;
-  }, [refreshChats]);
+  const getVibeRequests = useCallback(() => {
+    if (!user) return [];
+    return JSON.parse(localStorage.getItem('miscom_vibe_requests') || '[]')
+      .filter(r => r.to === user.uid && r.status === 'pending');
+  }, [user, socialVersion]);
 
-  const deleteMessageRequest = useCallback((chatId) => {
-    Backend.chats.deleteMessageRequest(chatId);
-    refreshChats();
-  }, [refreshChats]);
+  const acceptVibeRequest = useCallback(async (requestId) => {
+    if (!user) return;
+    const res = await Backend.social.acceptRequest(user.uid, requestId);
+    setSocialVersion(v => v + 1);
+    return res;
+  }, [user]);
+
+  const rejectVibeRequest = useCallback(async (requestId) => {
+    if (!user) return;
+    const res = await Backend.social.declineRequest(user.uid, requestId);
+    setSocialVersion(v => v + 1);
+    return res;
+  }, [user]);
+
+  const sendMessageRequest = useCallback(async (toUserId, message) => {
+    if (!user) return;
+    return await Backend.social.sendMessageRequest(user.uid, toUserId, message);
+  }, [user]);
 
   const refreshRooms = useCallback(() => setRooms(Backend.rooms.getAll()), []);
   const joinRoom = useCallback((id) => { Backend.rooms.join(id); refreshRooms(); }, [refreshRooms]);
@@ -340,6 +355,7 @@ export function GlobalProvider({ children }) {
       permissions, requestMicrophone, requestContacts,
       chats, refreshChats, getMessages, sendMessage, markChatRead, deleteChat,
       createOrGetDM, getRegularChats, getIncomingMessageRequests, acceptMessageRequest, deleteMessageRequest,
+      getVibeRequests, acceptVibeRequest, rejectVibeRequest, sendMessageRequest,
       rooms, refreshRooms, joinRoom, leaveRoom, createRoom,
       music, toggleMusic, skipTrack, joinMusicSession, addToQueue,
       notifications, unreadNotifCount, markNotificationsRead, markNotificationRead,

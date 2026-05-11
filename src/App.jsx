@@ -25,6 +25,7 @@ import Settings from './pages/Settings';
 import ProtectedRooms from './pages/ProtectedRooms';
 import RoomChat from './pages/RoomChat';
 import Discover from './pages/Discover';
+import Requests from './pages/Requests';
 import PostSignupOnboarding from './pages/PostSignupOnboarding';
 import Appearance from './pages/Appearance';
 import BottomNav from './components/BottomNav';
@@ -96,6 +97,7 @@ function AppRoutes() {
           {/* Core Protected Routes */}
           <Route path="/home" element={<Protected><Home /></Protected>} />
           <Route path="/chats" element={<Protected><Chats /></Protected>} />
+          <Route path="/requests" element={<Protected><Requests /></Protected>} />
           <Route path="/chat/:chatId" element={<Protected><ChatDetail /></Protected>} />
           <Route path="/vibe-rooms" element={<Protected><VibeRooms /></Protected>} />
           <Route path="/memories" element={<Protected><MemoryTimeline /></Protected>} />

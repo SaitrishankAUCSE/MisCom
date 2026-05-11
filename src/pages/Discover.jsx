@@ -8,8 +8,9 @@ import FirebaseSync from '../lib/firebase';
 
 export default function Discover() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, socialVersion } = useGlobal();
-  const [tab, setTab] = useState('discover');
+  const [tab, setTab] = useState(location.state?.tab || 'discover');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -82,7 +83,11 @@ export default function Discover() {
   const handleSync = (reqId) => {
     setActionLoading(reqId);
     const r = Backend.social.acceptRequest(user.uid, reqId);
-    if (r.success) { showToast('Synced! You\'re now connected ⚡'); refreshData(); }
+    if (r.success) { 
+      showToast('Synced! You\'re now connected ⚡'); 
+      refreshData();
+      setTab('circle'); // Switch to My Circle
+    }
     setTimeout(() => setActionLoading(null), 300);
   };
 
