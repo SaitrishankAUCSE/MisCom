@@ -18,6 +18,11 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isAuth();
       allow write: if isOwner(uid);
+
+      // Private sensitive data (Email, etc)
+      match /private/{document=**} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
     // ─── VIBE REQUESTS (Connections) ──────────────────────────────────────

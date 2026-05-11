@@ -69,34 +69,39 @@ const FirebaseSync = {
   async saveUser(userData) {
     if (!firebaseReady || !db) return;
     try {
-      // Use Firebase Auth UID as document key if available, otherwise app UID
       const docId = (auth?.currentUser?.uid) || userData.uid;
-      await Promise.race([
-        setDoc(doc(db, 'users', docId), {
-          ...userData,
-          normalizedUsername: (userData.username || '').toLowerCase(),
-          displayName: userData.displayName || userData.name || userData.username,
-          onlineStatus: 'online',
-          lastSeen: serverTimestamp(),
-          avatar: userData.avatar || '',
-          aura: userData.aura || '',
-          bio: userData.bio || '',
-          interests: userData.interests || [],
-          musicGenres: userData.musicGenres || [],
-          onboardingCompleted: userData.onboardingCompleted || false,
-          createdAt: userData.createdAt || serverTimestamp(),
-          lastLoginAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge: true }),
+      
+      // 1. Public Profile (NO sensitive data)
+      const publicData = {
+        ...userData,
+        normalizedUsername: (userData.username || '').toLowerCase(),
+        displayName: userData.displayName || userData.name || userData.username,
+        onlineStatus: 'online',
+        lastSeen: serverTimestamp(),
+        avatar: userData.avatar || '',
+        aura: userData.aura || '',
+        bio: userData.bio || '',
+        onboardingCompleted: userData.onboardingCompleted || false,
+        updatedAt: serverTimestamp()
+      };
+      // Explicitly delete sensitive fields
+      delete publicData.email;
+      delete publicData.password;
+
+      // 2. Private Profile (Accessible only to owner)
+      const privateData = {
+        email: userData.email || '',
+        updatedAt: serverTimestamp()
+      };
+
+      await Promise.all([
+        setDoc(doc(db, 'users', docId), publicData, { merge: true }),
+        setDoc(doc(db, 'users', docId, 'private', 'info'), privateData, { merge: true }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore timeout')), 5000))
       ]);
-      console.log('[MisCom] User synced to Firebase');
+      console.log('[MisCom] User profile synced (email protected)');
     } catch (err) {
-      if (err.message.includes('NOT_FOUND') || err.message.includes('not-found')) {
-        console.error('[MisCom] CRITICAL: Firestore Database "(default)" NOT FOUND. Please initialize it in the Firebase Console.');
-      } else {
-        console.warn('[MisCom] Firebase sync failed:', err.message);
-      }
+      console.warn('[MisCom] Firebase sync failed:', err.message);
     }
   },
 
