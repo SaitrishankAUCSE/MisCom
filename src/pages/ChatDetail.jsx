@@ -2,80 +2,103 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
-import E2E from '../lib/e2e';
+import FirebaseSync from '../lib/firebase';
+
+// ── Status terminology (MisCom style) ──
+// "beaming"  → sent (message left your device)
+// "landed"   → delivered (reached the server / other device)
+// "vibed"    → seen/read by the recipient
+const STATUS_LABELS = {
+  beaming: '✦ Beaming',
+  landed: '↯ Landed',
+  vibed: '✧ Vibed',
+};
+
+function uid() { return 'msg-' + Date.now() + Math.random().toString(36).slice(2, 8); }
 
 export default function ChatDetail() {
   const { chatId } = useParams();
   const navigate = useNavigate();
-  const { getMessages, sendMessage, markChatRead, chats, timeAgo, acceptMessageRequest, deleteMessageRequest, user } = useGlobal();
+  const { chats, user, markChatRead, acceptMessageRequest, deleteMessageRequest, timeAgo, refreshChats } = useGlobal();
 
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [e2eEnabled] = useState(E2E.isAvailable());
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const unsubRef = useRef(null);
 
   const chat = chats.find(c => c.id === chatId);
 
+  // ── Real-time listener ──
   useEffect(() => {
-    if (chatId) {
-      const raw = getMessages(chatId);
-      // Decrypt messages
-      if (e2eEnabled) {
-        Promise.all(raw.map(async m => ({
-          ...m,
-          text: await E2E.decrypt(m.text),
-          _encrypted: E2E.isEncrypted(m.text),
-        }))).then(setMessages);
-      } else {
-        setMessages(raw);
-      }
-      markChatRead(chatId);
-    }
-  }, [chatId, getMessages, markChatRead, e2eEnabled]);
+    if (!chatId || !user) return;
 
+    // Listen to Firebase for real-time messages
+    if (FirebaseSync.isReady()) {
+      unsubRef.current = FirebaseSync.listenMessages(chatId, (firebaseMessages) => {
+        setMessages(firebaseMessages);
+
+        // Mark unread messages from the other person as "vibed"
+        firebaseMessages.forEach(msg => {
+          if (msg.senderId !== user.uid && msg.status !== 'vibed') {
+            FirebaseSync.updateMessageStatus(chatId, msg.id, 'vibed').catch(() => {});
+          }
+        });
+      });
+    }
+
+    markChatRead(chatId);
+
+    return () => {
+      if (unsubRef.current) unsubRef.current();
+    };
+  }, [chatId, user]);
+
+  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ── Send Message ──
   const handleSend = async () => {
-    if (!newMsg.trim()) return;
-    const plain = newMsg.trim();
+    if (!newMsg.trim() || !user) return;
+    const text = newMsg.trim();
     setNewMsg('');
 
-    // Encrypt before storing
-    const toStore = e2eEnabled ? await E2E.encrypt(plain) : plain;
-    sendMessage(chatId, toStore);
+    const msgId = uid();
+    const msg = {
+      id: msgId,
+      senderId: user.uid,
+      senderName: user.name || user.username,
+      senderAvatar: user.avatar || null,
+      text,
+      timestamp: Date.now(),
+      status: 'beaming', // Just sent
+      type: 'text',
+    };
 
-    // Show decrypted version immediately in UI
-    const raw = getMessages(chatId);
-    if (e2eEnabled) {
-      Promise.all(raw.map(async m => ({
-        ...m,
-        text: await E2E.decrypt(m.text),
-        _encrypted: E2E.isEncrypted(m.text),
-      }))).then(setMessages);
-    } else {
-      setMessages(raw);
+    // Optimistic update — show immediately
+    setMessages(prev => [...prev, msg]);
+
+    // Save to Firebase
+    if (FirebaseSync.isReady()) {
+      await FirebaseSync.sendMessage(chatId, msg);
+      // Update status to "landed" once Firebase confirms
+      await FirebaseSync.updateMessageStatus(chatId, msgId, 'landed').catch(() => {});
     }
 
-    // Show typing indicator then refresh for auto-reply
-    setIsTyping(true);
-    setTimeout(async () => {
-      setIsTyping(false);
-      const updated = getMessages(chatId);
-      if (e2eEnabled) {
-        const decrypted = await Promise.all(updated.map(async m => ({
-          ...m,
-          text: await E2E.decrypt(m.text),
-          _encrypted: E2E.isEncrypted(m.text),
-        })));
-        setMessages(decrypted);
-      } else {
-        setMessages(updated);
-      }
-    }, 2000 + Math.random() * 2000);
+    // Update local chat preview
+    const allChats = JSON.parse(localStorage.getItem('miscom_chats') || '[]');
+    const ci = allChats.findIndex(c => c.id === chatId);
+    if (ci !== -1) {
+      allChats[ci].lastMessage = text;
+      allChats[ci].lastMessageTime = Date.now();
+      localStorage.setItem('miscom_chats', JSON.stringify(allChats));
+      refreshChats();
+    }
+
+    inputRef.current?.focus();
   };
 
   const handleKeyDown = (e) => {
@@ -83,6 +106,14 @@ export default function ChatDetail() {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  // ── Status icon for sent messages ──
+  const StatusIcon = ({ status }) => {
+    if (!status) return null;
+    const label = STATUS_LABELS[status] || status;
+    const color = status === 'vibed' ? 'text-blue-400' : status === 'landed' ? 'text-white/70' : 'text-white/40';
+    return <span className={`text-[9px] font-label-bold ${color} ml-1`}>{label}</span>;
   };
 
   if (!chat) {
@@ -127,9 +158,8 @@ export default function ChatDetail() {
               {chat.isRequest && !chat.requestAccepted && chat.contactId === user?.uid ? (
                 <span className="text-primary-container font-label-bold">Message Request</span>
               ) : isTyping ? (
-                <span className="text-primary-container animate-pulse">typing...</span>
-              ) : chat.online ? 'Online' : 'Offline'}
-              {e2eEnabled && <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full font-bold ml-1"><span className="material-symbols-outlined text-[10px]">lock</span>E2E</span>}
+                <span className="text-primary-container animate-pulse">vibing...</span>
+              ) : chat.online ? 'In the Zone' : 'Away'}
             </p>
           </div>
         </div>
@@ -144,26 +174,52 @@ export default function ChatDetail() {
       {/* Messages */}
       <main className="flex-1 pt-24 pb-24 px-4 overflow-y-auto">
         <div className="flex flex-col gap-2">
+          {/* Date separator */}
+          {messages.length > 0 && (
+            <div className="text-center my-3">
+              <span className="text-[10px] text-secondary bg-surface-container-low px-3 py-1 rounded-full font-label-bold">
+                {new Date(messages[0].timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+          )}
+
           <AnimatePresence>
             {messages.map((msg, i) => {
-              const isMe = msg.sender === 'me';
+              const isMe = msg.senderId === user?.uid;
               return (
                 <motion.div
                   key={msg.id}
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.2, delay: i * 0.02 }}
+                  transition={{ duration: 0.2, delay: i < 20 ? i * 0.02 : 0 }}
                   className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
                 >
+                  {/* Avatar for received messages */}
+                  {!isMe && (
+                    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-variant mr-2 shrink-0 mt-auto mb-1">
+                      {msg.senderAvatar ? (
+                        <img src={msg.senderAvatar} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="material-symbols-outlined text-secondary text-sm">person</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className={`max-w-[75%] rounded-2xl px-4 py-3 ${
                     isMe
                       ? 'bg-primary-container text-white rounded-br-md'
                       : 'bg-surface-container-low text-on-surface rounded-bl-md'
                   }`}>
+                    {/* Sender name for group-style context */}
+                    {!isMe && msg.senderName && (
+                      <p className="text-[11px] font-label-bold text-primary-container mb-1">{msg.senderName}</p>
+                    )}
                     <p className="text-[14px] leading-relaxed">{msg.text}</p>
-                    <p className={`text-[10px] mt-1 flex items-center gap-1 ${isMe ? 'text-white/60' : 'text-secondary'}`}>
+                    <p className={`text-[10px] mt-1 flex items-center gap-1 ${isMe ? 'text-white/60 justify-end' : 'text-secondary'}`}>
                       {timeAgo(msg.timestamp)}
-                      {msg._encrypted && <span className="material-symbols-outlined text-[10px]">lock</span>}
+                      {isMe && <StatusIcon status={msg.status} />}
                     </p>
                   </div>
                 </motion.div>
@@ -202,7 +258,7 @@ export default function ChatDetail() {
           <div className="flex flex-col gap-3 pb-2">
             <div className="text-center pb-2 border-b border-surface-variant/30">
               <p className="font-label-bold text-sm">Accept message request from {chat.name}?</p>
-              <p className="text-xs text-secondary mt-1">If you accept, they will be able to see when you've read messages.</p>
+              <p className="text-xs text-secondary mt-1">If you accept, they will be able to see when you've vibed their messages.</p>
             </div>
             <div className="flex gap-2">
               <motion.button whileTap={{ scale: 0.95 }} onClick={() => { deleteMessageRequest(chatId); navigate('/chats'); }}
@@ -227,7 +283,7 @@ export default function ChatDetail() {
                 value={newMsg}
                 onChange={e => setNewMsg(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
+                placeholder="Beam a message..."
                 className="w-full bg-surface-container-low rounded-full px-4 py-3 pr-12 outline-none text-[14px] focus:ring-2 focus:ring-primary-container/30 transition-all"
               />
               <button className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-on-surface transition-colors">

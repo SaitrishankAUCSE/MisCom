@@ -21,6 +21,7 @@ import {
   getDocs,
   query,
   where,
+  orderBy,
   serverTimestamp,
   onSnapshot,
   deleteDoc
@@ -265,6 +266,30 @@ const FirebaseSync = {
   async updateFriendsList(userId, friendsList) {
     if (!firebaseReady || !db) return;
     try { await setDoc(doc(db, 'friends', userId), { friends: friendsList }, { merge: true }); } catch (e) { console.error(e); }
+  },
+
+  async sendMessage(chatId, msg) {
+    if (!firebaseReady || !db) return;
+    try {
+      const msgRef = doc(collection(db, 'chats', chatId, 'messages'), msg.id);
+      await setDoc(msgRef, msg);
+    } catch (e) { console.error(e); }
+  },
+
+  listenMessages(chatId, onUpdate) {
+    if (!firebaseReady || !db) return () => {};
+    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
+    return onSnapshot(q, (snap) => {
+      const msgs = snap.docs.map(d => d.data());
+      onUpdate(msgs);
+    });
+  },
+
+  async updateMessageStatus(chatId, msgId, status) {
+    if (!firebaseReady || !db) return;
+    try {
+      await updateDoc(doc(db, 'chats', chatId, 'messages', msgId), { status });
+    } catch (e) { console.error(e); }
   },
 
   // ── REALTIME GLOBAL SYNC ──

@@ -134,7 +134,7 @@ export default function Chats() {
                       <span className="font-label-sm text-label-sm text-on-surface-variant shrink-0 ml-2">{timeAgo(chat.lastMessageTime)}</span>
                     </div>
                     <p className={`font-body-md text-[14px] truncate ${chat.typing ? 'text-primary-container animate-pulse italic' : 'text-on-surface-variant'}`}>
-                      {chat.typing ? 'typing...' : chat.lastMessage}
+                      {chat.typing ? 'vibing...' : chat.lastMessage}
                     </p>
                   </div>
                   {chat.unread > 0 && (
@@ -163,11 +163,7 @@ export default function Chats() {
       {/* FAB - New Chat */}
       <motion.button
         whileTap={{ scale: 0.9 }}
-        onClick={() => {
-          // If the user hasn't added friends yet, we don't have a new chat screen
-          // In a real app this would go to a contacts picker.
-          alert("Contact picker coming soon!");
-        }}
+        onClick={() => navigate('/discover')}
         className="fixed bottom-24 right-6 w-14 h-14 bg-primary-container text-white rounded-full shadow-[0_8px_20px_rgba(225,29,72,0.4)] flex items-center justify-center z-40 hover:shadow-[0_12px_25px_rgba(225,29,72,0.5)] transition-shadow"
       >
         <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>edit</span>

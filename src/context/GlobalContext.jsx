@@ -208,7 +208,6 @@ export function GlobalProvider({ children }) {
   const sendMessage = useCallback((chatId, text) => {
     const msg = Backend.chats.sendMessage(chatId, text);
     refreshChats();
-    Backend.chats.autoReply(chatId).then(() => refreshChats());
     return msg;
   }, [refreshChats]);
 
