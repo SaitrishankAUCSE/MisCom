@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobal } from '../context/GlobalContext';
 import Logo from '../components/Logo';
@@ -8,6 +8,7 @@ import FirebaseSync from '../lib/firebase';
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signup, signupWithGoogle } = useGlobal();
 
   const [name, setName] = useState('');
@@ -24,6 +25,12 @@ export default function Signup() {
   // Track whether Google pre-filled the form
   const [isGooglePrefilled, setIsGooglePrefilled] = useState(false);
   const [emailLocked, setEmailLocked] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('method') === 'google') {
+      handleGoogleAuth();
+    }
+  }, []);
 
   // Real-time validation states
   const [usernameStatus, setUsernameStatus] = useState('idle');
@@ -353,7 +360,7 @@ export default function Signup() {
             </div>
           </div>
 
-          <motion.button whileTap={{ scale: 0.97 }} disabled={loading || !isFormValid}
+          <motion.button type="submit" whileTap={{ scale: 0.97 }} disabled={loading || !isFormValid}
             className="w-full bg-primary-container text-white rounded-[2rem] py-4 mt-2 font-bold text-lg shadow-[0_8px_20px_rgba(225,29,72,0.3)] transition-all flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-40">
             {loading ? (
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}

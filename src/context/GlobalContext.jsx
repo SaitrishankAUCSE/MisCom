@@ -139,6 +139,7 @@ export function GlobalProvider({ children }) {
       await FirebaseSync.saveUser(u).catch(() => {});
       
       setUser(u);
+      setProfile(u); // Hydrate profile immediately
       refreshAll();
       return u;
     }
@@ -159,50 +160,60 @@ export function GlobalProvider({ children }) {
   };
 
   const login = async (identifier, password) => {
-    // 1. Try Firebase Auth first if ready
+    // Strict Firebase Auth Flow
     if (FirebaseSync.isReady()) {
       try {
-        // Find user email if identifier is username
-        let email = identifier;
-        if (!identifier.includes('@')) {
-          const localUser = Backend.auth.getAllUsers().find(x => x.username.toLowerCase() === identifier.toLowerCase());
-          if (localUser) email = localUser.email;
+        let email = identifier.trim();
+        
+        // Mapping: If identifier is a username, find the email
+        if (!email.includes('@')) {
+          const allUsers = Backend.auth.getAllUsers();
+          const found = allUsers.find(x => (x.username || '').toLowerCase() === email.toLowerCase());
+          if (found && found.email) {
+            email = found.email;
+          } else {
+            // Check cloud if not found locally
+            const cloudUser = await FirebaseSync.getUserByIdentifier(email);
+            if (cloudUser && cloudUser.email) {
+              email = cloudUser.email;
+            } else {
+              throw new Error('User not found. Please check your username.');
+            }
+          }
         }
 
         const fbUser = await FirebaseSync.signIn(email, password);
         if (fbUser) {
-          // Firebase Auth succeeded! Check local profile
+          // Auth succeeded! Hydrate profile
           let u = Backend.auth.getAllUsers().find(x => x.uid === fbUser.uid);
           
           if (!u) {
-            // Recover from cloud
             const cloudProfile = await FirebaseSync.getUser(fbUser.uid);
             if (cloudProfile) {
               Backend.auth.restoreUser(cloudProfile);
               u = cloudProfile;
             } else {
-               throw new Error('Account verified but profile not found. Please contact support.');
+              throw new Error('Profile synchronization failed. Please try again.');
             }
           }
 
-          // Create local session
-          await Backend.auth.login(u.email, password, true);
+          // Force local session state sync
+          await Backend.auth.login(u.email, password, true); 
           setUser(u);
+          setProfile(u); // Hydrate profile immediately
           refreshAll();
           return u;
         }
       } catch (err) {
-        // If it's a password error, don't fall back
-        if (err.message.includes('password') || err.code?.includes('password')) throw err;
-        console.warn('[Login] Firebase login failed, attempting local fallback:', err.message);
+        // Detailed error reporting for the user
+        let friendlyMsg = err.message;
+        if (err.code === 'auth/user-not-found') friendlyMsg = 'No account exists with this email.';
+        if (err.code === 'auth/wrong-password') friendlyMsg = 'Incorrect password.';
+        if (err.code === 'auth/invalid-email') friendlyMsg = 'Please enter a valid email address.';
+        throw new Error(friendlyMsg);
       }
     }
-
-    // 2. Fallback to local login
-    const u = await Backend.auth.login(identifier, password);
-    setUser(u);
-    refreshAll();
-    return u;
+    throw new Error('Authentication service is offline. Please try again later.');
   };
 
   const loginWithGoogle = async () => {

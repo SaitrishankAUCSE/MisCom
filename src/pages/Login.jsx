@@ -21,6 +21,12 @@ export default function Login() {
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
   const identifierType = !identifier ? '' : isEmail ? 'email' : 'username';
   const isFormValid = identifier.length >= 3 && password.length >= 6;
+  
+  React.useEffect(() => {
+    if (searchParams.get('method') === 'google') {
+      handleGoogle();
+    }
+  }, []);
 
   // ── Email/Username Login ──
   const handleSubmit = async (e) => {
@@ -97,7 +103,7 @@ export default function Login() {
         </AnimatePresence>
 
         {/* Google Login Button */}
-        <button onClick={handleGoogle} disabled={loading || googleLoading}
+        <button type="button" onClick={handleGoogle} disabled={loading || googleLoading}
           className="w-full bg-surface border border-surface-variant rounded-[2rem] py-4 font-bold text-base shadow-sm hover:bg-surface-container-lowest flex items-center justify-center gap-3 transition-colors disabled:opacity-50 mb-6">
           {googleLoading ? (
             <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
@@ -160,7 +166,7 @@ export default function Login() {
             </button>
           </div>
 
-          <motion.button whileTap={{ scale: 0.97 }} disabled={loading || !isFormValid}
+          <motion.button type="submit" whileTap={{ scale: 0.97 }} disabled={loading || !isFormValid}
             className="w-full bg-primary-container text-white rounded-[2rem] py-4 font-bold text-lg shadow-[0_8px_20px_rgba(225,29,72,0.3)] transition-all flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-50">
             {loading ? (
               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}

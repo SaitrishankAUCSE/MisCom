@@ -202,7 +202,7 @@ export default function ForgotPassword() {
                   </div>
                 </div>
 
-                <motion.button whileTap={{ scale: 0.97 }} disabled={loading || identifier.length < 3}
+                <motion.button type="submit" whileTap={{ scale: 0.97 }} disabled={loading || identifier.length < 3}
                   className="w-full bg-primary-container text-white rounded-[2rem] py-4 font-bold text-lg shadow-[0_8px_20px_rgba(225,29,72,0.3)] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50">
                   {loading ? (
                     <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
@@ -331,7 +331,7 @@ export default function ForgotPassword() {
                   </div>
                 </div>
 
-                <motion.button whileTap={{ scale: 0.97 }} disabled={loading || !isPasswordValid}
+                <motion.button type="submit" whileTap={{ scale: 0.97 }} disabled={loading || !isPasswordValid}
                   className="w-full bg-primary-container text-white rounded-[2rem] py-4 mt-2 font-bold text-lg shadow-[0_8px_20px_rgba(225,29,72,0.3)] transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                   {loading ? (
                     <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
