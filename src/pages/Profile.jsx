@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import TopAppBar from '../components/TopAppBar';
 import { useGlobal } from '../context/GlobalContext';
 import Avatar from '../components/Avatar';
+import { storage } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -35,9 +37,6 @@ export default function Profile() {
     
     setUploading(true);
     try {
-      const { storage } = await import('../lib/firebase');
-      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-      
       const avatarRef = ref(storage, `avatars/${user.uid}`);
       await uploadBytes(avatarRef, file);
       const url = await getDownloadURL(avatarRef);

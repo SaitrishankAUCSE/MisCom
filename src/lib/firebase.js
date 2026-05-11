@@ -30,6 +30,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyALsXuYdXkuOAMHgaM6Ap8M5HW3nmZwbzE",
@@ -41,21 +42,21 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-2X5F7322PM"
 };
 
-let app, auth, db, googleProvider;
+let app, auth, db, storage, googleProvider;
 let firebaseReady = false;
 
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
   googleProvider = new GoogleAuthProvider();
-  const functions = getFunctions(app);
-  // Test if Firebase is configured with real credentials
-  firebaseReady = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'dummy_api_key';
+  firebaseReady = true;
+  console.log('[MisCom] Firebase Production Engine Initialized');
 } catch (err) {
-  console.warn('[MisCom] Firebase init failed, using local backend:', err.message);
-  firebaseReady = false;
+  console.warn('[MisCom] Firebase Initialization Error:', err.message);
 }
+
 
 /**
  * Firebase Sync Layer
@@ -567,5 +568,5 @@ const FirebaseSync = {
   }
 };
 
-export { auth, db, googleProvider, FirebaseSync };
+export { auth, db, storage, googleProvider, FirebaseSync };
 export default FirebaseSync;

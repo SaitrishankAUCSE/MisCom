@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   collection, query, orderBy, limit,
   onSnapshot, addDoc, serverTimestamp,
-  doc, updateDoc, getDoc, setDoc
+  doc, updateDoc, getDoc, setDoc,
+  deleteField
 } from 'firebase/firestore';
 import { db, FirebaseSync } from '../lib/firebase';
 import { STATUS, markThreadFelt, markThreadReached } from '../lib/messageStatus';
@@ -135,7 +136,6 @@ export function useChat(chatId, currentUserId) {
   // ── Remove own resonance ──────────────────────────────────────────────────
   const removeResonance = useCallback(async (messageId) => {
     if (!FirebaseSync.isReady()) return;
-    const { deleteField } = await import('firebase/firestore');
     await updateDoc(
       doc(db, `chats/${chatId}/messages`, messageId),
       { [`resonances.${currentUserId}`]: deleteField() }
