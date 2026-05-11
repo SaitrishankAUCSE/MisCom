@@ -447,6 +447,33 @@ const FirebaseSync = {
       unsubChatMeta();
     };
   },
+
+  // ── ACCOUNT LIFECYCLE ──
+  async reauthenticate(password) {
+    if (!auth.currentUser) throw new Error('No user logged in');
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    return await reauthenticateWithCredential(auth.currentUser, credential);
+  },
+
+  async deleteAccount() {
+    if (!firebaseReady || !auth.currentUser) return;
+    try {
+      // Call the Cloud Function for deep cleanup (if deployed)
+      const functions = getFunctions();
+      const deleteFunc = httpsCallable(functions, 'deleteUserAccount');
+      await deleteFunc();
+      
+      // Also delete from Auth client-side
+      await deleteUser(auth.currentUser);
+    } catch (e) {
+      console.error('Delete account error:', e);
+      // Fallback: If function fails (e.g. not deployed), try to just delete auth user
+      if (auth.currentUser) {
+        await deleteUser(auth.currentUser).catch(() => {});
+      }
+      throw e;
+    }
+  },
 };
 
 export { auth, db, googleProvider, FirebaseSync };

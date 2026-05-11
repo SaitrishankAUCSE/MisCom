@@ -82,7 +82,7 @@ export default function Signup() {
           uid: u.uid,
           email: u.email,
           username: username.toLowerCase(),
-          name: name.trim(),
+          displayName: name.trim(), // Use as display name
           onboardingCompleted: false,
           createdAt: serverTimestamp(),
         }, { merge: true });
@@ -108,7 +108,7 @@ export default function Signup() {
           uid: u.uid,
           email: u.email,
           username: username.toLowerCase(),
-          name: name.trim(),
+          displayName: name.trim(), // Use as display name
           onboardingCompleted: false,
           createdAt: serverTimestamp(),
         }, { merge: true });
@@ -231,13 +231,13 @@ export default function Signup() {
         )}
 
         <form onSubmit={isGooglePrefilled ? handleGoogleFinalize : handleEmailSignup} className="flex flex-col gap-4">
-          {/* Full Name */}
+          {/* Display Name */}
           <div>
-            <label className="text-xs font-label-bold text-secondary ml-4 mb-1.5 block">Full Name</label>
+            <label className="text-xs font-label-bold text-secondary ml-4 mb-1.5 block">Display Name</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-xl">person</span>
               <input type="text" value={name} onChange={e => setName(e.target.value)}
-                placeholder="e.g. Alex River"
+                placeholder="e.g. Alex ✨"
                 className="w-full bg-transparent border-2 border-surface-variant rounded-[1.25rem] pl-12 pr-4 py-4 outline-none focus:border-primary-container transition-colors" />
             </div>
           </div>
