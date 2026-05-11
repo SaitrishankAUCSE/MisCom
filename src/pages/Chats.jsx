@@ -161,11 +161,19 @@ export default function Chats() {
                       {chat.typing ? 'vibing...' : (viewingRequests ? '✦ Wants to vibe with you' : chat.lastMessage)}
                     </p>
                   </div>
-                  {chat.unread > 0 && (
-                    <div className="ml-4">
-                      <div className="w-6 h-6 bg-primary-container rounded-full flex items-center justify-center font-label-sm text-[10px] text-on-primary shadow-sm">{chat.unread}</div>
-                    </div>
-                  )}
+                  {(() => {
+                    const unread = chat.unreadCounts?.[user?.uid] || chat.unread || 0;
+                    if (unread > 0) {
+                      return (
+                        <div className="ml-4">
+                          <div className="w-6 h-6 bg-primary-container rounded-full flex items-center justify-center font-label-sm text-[10px] text-on-primary shadow-sm font-bold animate-pulse">
+                            {unread}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </motion.div>
               </motion.div>
             ))}

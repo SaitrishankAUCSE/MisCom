@@ -61,6 +61,16 @@ exports.onNewDMMessage = onDocumentCreated(
       createdAt: FieldValue.serverTimestamp(),
     });
 
+    // 6.5 Increment unread count in chat_meta
+    await db.doc(`chat_meta/${chatId}`).set({
+      unreadCounts: {
+        [recipientId]: FieldValue.increment(1)
+      },
+      lastMessage: body,
+      lastMessageTime: FieldValue.serverTimestamp(),
+      lastSenderId: message.senderId
+    }, { merge: true });
+
     // 7. Send FCM push if recipient has a token
     const fcmToken = recipient.fcmToken;
     if (!fcmToken) return;
@@ -119,6 +129,13 @@ exports.onNewRoomMessage = onDocumentCreated(
         read:        false,
         createdAt:   FieldValue.serverTimestamp(),
       });
+
+      // Increment unread count in room meta
+      await db.doc(`rooms/${roomId}`).set({
+        unreadCounts: {
+          [uid]: FieldValue.increment(1)
+        }
+      }, { merge: true });
 
       const userSnap = await db.doc(`users/${uid}`).get();
       if (!userSnap.exists) return;

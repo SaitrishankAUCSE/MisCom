@@ -47,9 +47,15 @@ export default function ChatDetail() {
     if (chatId && user?.uid) loadOther();
   }, [chatId, user?.uid]);
 
-  // ── Set activeChat for notification suppression ──
+  // ── Set activeChat for notification suppression & clear unread ──
   useEffect(() => {
     if (!user?.uid || !FirebaseSync.isReady()) return;
+    
+    // Clear unread count for ME
+    updateDoc(doc(db, `chat_meta`, chatId), {
+      [`unreadCounts.${user.uid}`]: 0
+    }).catch(() => {});
+
     updateDoc(doc(db, `users`, user.uid), { activeChat: chatId });
     return () => updateDoc(doc(db, `users`, user.uid), { activeChat: null });
   }, [chatId, user?.uid]);
