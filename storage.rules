@@ -1,0 +1,41 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper: is the user authenticated?
+    function isAuth() {
+      return request.auth != null;
+    }
+    
+    // Helper: is this the user's own path?
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // ─── USER CONTENT ──────────────────────────────────────────────────────
+    match /users/{uid}/{allPaths=**} {
+      allow read: if isAuth();
+      allow write: if isOwner(uid);
+    }
+
+    // ─── CHAT MEDIA ────────────────────────────────────────────────────────
+    // Allows participants to upload and read media in chats
+    match /chat_media/{chatId}/{uid}/{allPaths=**} {
+      allow read: if isAuth(); // For simplicity, but could be restricted by checking firestore chat_meta
+      allow write: if isOwner(uid) && 
+                   request.resource.size < 50 * 1024 * 1024 && // 50MB limit
+                   (request.resource.contentType.matches('image/.*') || 
+                    request.resource.contentType.matches('video/.*') ||
+                    request.resource.contentType.matches('audio/.*') ||
+                    request.resource.contentType.matches('application/pdf') ||
+                    request.resource.contentType.matches('application/zip') ||
+                    request.resource.contentType.matches('text/.*'));
+    }
+    
+    // ─── ROOM MEDIA ────────────────────────────────────────────────────────
+    match /room_media/{roomId}/{uid}/{allPaths=**} {
+      allow read: if isAuth();
+      allow write: if isOwner(uid) && request.resource.size < 100 * 1024 * 1024;
+    }
+  }
+}

@@ -9,9 +9,19 @@ import { STATUS, markThreadFelt, markThreadReached } from '../lib/messageStatus'
 
 export function useChat(chatId, currentUserId) {
   const [messages,    setMessages]    = useState([]);
-  const [isEchoing,   setIsEchoing]   = useState(false); // other person typing (Echoing)
+  const [isEchoing,   setIsEchoing]   = useState(false); 
   const [loading,     setLoading]     = useState(true);
+  const [chatMeta,    setChatMeta]    = useState(null);
   const typingTimer = useRef(null);
+
+  // ── Live chat meta listener (locking/connection status) ──────────────────
+  useEffect(() => {
+    if (!chatId || !FirebaseSync.isReady()) return;
+    const unsub = onSnapshot(doc(db, 'chat_meta', chatId), (snap) => {
+      if (snap.exists()) setChatMeta(snap.data());
+    });
+    return unsub;
+  }, [chatId]);
 
   // ── Live message listener ────────────────────────────────────────────────
   useEffect(() => {
@@ -127,10 +137,14 @@ export function useChat(chatId, currentUserId) {
     );
   }, [chatId, currentUserId]);
 
+  const isLocked = chatMeta?.isRequest && !chatMeta?.requestAccepted && chatMeta?.requestFrom === currentUserId;
+
   return {
     messages,
     loading,
-    isEchoing,        // other person is typing
+    isEchoing,
+    isLocked,
+    chatMeta,
     sendEcho,
     announceEchoing,
     clearEchoing,

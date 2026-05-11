@@ -282,22 +282,52 @@ const FirebaseSync = {
   // ── SOCIAL (Firestore Writes) ──
   async sendVibeRequest(req) {
     if (!firebaseReady || !db) return;
-    try { await setDoc(doc(db, 'friend_requests', req.id), req); } catch (e) { console.error(e); }
+    try { await setDoc(doc(db, 'vibe_requests', req.id), req); } catch (e) { console.error(e); }
   },
 
   async updateVibeRequest(reqId, status) {
     if (!firebaseReady || !db) return;
-    try { await updateDoc(doc(db, 'friend_requests', reqId), { status }); } catch (e) { console.error(e); }
+    try { await updateDoc(doc(db, 'vibe_requests', reqId), { status }); } catch (e) { console.error(e); }
   },
 
   async deleteVibeRequest(reqId) {
     if (!firebaseReady || !db) return;
-    try { await deleteDoc(doc(db, 'friend_requests', reqId)); } catch (e) { console.error(e); }
+    try { await deleteDoc(doc(db, 'vibe_requests', reqId)); } catch (e) { console.error(e); }
   },
 
   async updateFriendsList(userId, friendsList) {
     if (!firebaseReady || !db) return;
     try { await setDoc(doc(db, 'friends', userId), { friends: friendsList }, { merge: true }); } catch (e) { console.error(e); }
+  },
+
+  // ── MESSAGE REQUESTS ──
+  async sendMessageRequest(req) {
+    if (!firebaseReady || !db) return;
+    try { await setDoc(doc(db, 'message_requests', req.id), req); } catch (e) { console.error(e); }
+  },
+
+  async updateMessageRequest(reqId, status) {
+    if (!firebaseReady || !db) return;
+    try { await updateDoc(doc(db, 'message_requests', reqId), { status }); } catch (e) { console.error(e); }
+  },
+
+  // ── BLOCKING ──
+  async blockUser(userId, blockId) {
+    if (!firebaseReady || !db) return;
+    try {
+      await setDoc(doc(db, 'blocked_users', userId), { 
+        blocked: arrayUnion(blockId) 
+      }, { merge: true });
+    } catch (e) { console.error(e); }
+  },
+
+  async unblockUser(userId, blockId) {
+    if (!firebaseReady || !db) return;
+    try {
+      await updateDoc(doc(db, 'blocked_users', userId), { 
+        blocked: arrayRemove(blockId) 
+      });
+    } catch (e) { console.error(e); }
   },
 
   async sendMessage(chatId, msg) {
@@ -381,12 +411,19 @@ const FirebaseSync = {
       if (onUpdate) onUpdate();
     });
 
-    // Sync friend requests relevant to the current user (incoming or outgoing)
-    const unsubRequests = onSnapshot(collection(db, 'friend_requests'), (snap) => {
+    // Sync vibe requests relevant to the current user (incoming or outgoing)
+    const unsubVibeRequests = onSnapshot(collection(db, 'vibe_requests'), (snap) => {
       const allRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Filter locally for now as Firestore complex "OR" queries require multiple indexes
       const myRequests = allRequests.filter(r => r.to === uid || r.from === uid);
-      localStorage.setItem('miscom_friend_requests', JSON.stringify(myRequests));
+      localStorage.setItem('miscom_vibe_requests', JSON.stringify(myRequests));
+      if (onUpdate) onUpdate();
+    });
+
+    // Sync message requests relevant to the current user
+    const unsubMsgRequests = onSnapshot(collection(db, 'message_requests'), (snap) => {
+      const allRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const myRequests = allRequests.filter(r => r.receiverId === uid || r.senderId === uid);
+      localStorage.setItem('miscom_message_requests', JSON.stringify(myRequests));
       if (onUpdate) onUpdate();
     });
 

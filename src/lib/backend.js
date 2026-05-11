@@ -1198,6 +1198,42 @@ const Backend = {
       if (received) return 'received';
       return 'none';
     },
+
+    // ─── MESSAGE REQUESTS ──────────────────────────────────────────────────
+    async sendMessageRequest(fromId, toId, firstMessage) {
+      if (fromId === toId) return { success: false, error: "Can't message yourself" };
+      const req = {
+        id: 'mr-' + Date.now(),
+        senderId: fromId,
+        receiverId: toId,
+        message: firstMessage,
+        status: 'pending',
+        createdAt: Date.now()
+      };
+      if (FirebaseSync.isReady()) await FirebaseSync.sendMessageRequest(req);
+      return { success: true };
+    },
+
+    async acceptMessageRequest(userId, requestId) {
+      if (FirebaseSync.isReady()) await FirebaseSync.updateMessageRequest(requestId, 'accepted');
+      return { success: true };
+    },
+
+    async rejectMessageRequest(userId, requestId) {
+      if (FirebaseSync.isReady()) await FirebaseSync.updateMessageRequest(requestId, 'rejected');
+      return { success: true };
+    },
+
+    // ─── BLOCKING ─────────────────────────────────────────────────────────
+    async blockUser(userId, blockId) {
+      if (FirebaseSync.isReady()) await FirebaseSync.blockUser(userId, blockId);
+      return { success: true };
+    },
+
+    async unblockUser(userId, blockId) {
+      if (FirebaseSync.isReady()) await FirebaseSync.unblockUser(userId, blockId);
+      return { success: true };
+    }
   },
 
   timeAgo, V,

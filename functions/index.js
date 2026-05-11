@@ -207,19 +207,17 @@ exports.deleteUserAccount = functions.https.onCall(async (data, context) => {
   }
 });
 
-// ─── Friend Request Notification ──────────────────────────────────────────
-exports.onNewFriendRequest = onDocumentCreated(
-  'friend_requests/{requestId}',
+// ─── Vibe Request Notification ──────────────────────────────────────────
+exports.onNewVibeRequest = onDocumentCreated(
+  'vibe_requests/{requestId}',
   async (event) => {
     const req = event.data.data();
     if (req.status !== 'pending') return;
 
-    // 1. Get sender info
     const senderSnap = await db.doc(`users/${req.from}`).get();
     const sender = senderSnap.exists ? senderSnap.data() : null;
     const senderName = sender?.displayName || sender?.username || 'Someone';
 
-    // 2. Add to recipient's notification feed
     await db.collection(`notifications/${req.to}/user_notifs`).add({
       type: 'vibe_request',
       requestId: event.params.requestId,
@@ -231,27 +229,59 @@ exports.onNewFriendRequest = onDocumentCreated(
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    // 3. Send Push Notification
     const recipientSnap = await db.doc(`users/${req.to}`).get();
     if (!recipientSnap.exists) return;
-    const recipient = recipientSnap.data();
-    const fcmToken = recipient.fcmToken;
-    if (!fcmToken) return;
+    const fcmToken = recipientSnap.data().fcmToken;
+    if (fcmToken) {
+      try {
+        await getMessaging().send({
+          token: fcmToken,
+          notification: {
+            title: 'New Vibe Request ✨',
+            body: `${senderName} wants to connect with you!`,
+          },
+          data: { type: 'vibe_request', requestId: event.params.requestId }
+        });
+      } catch (err) {}
+    }
+  }
+);
 
-    try {
-      await getMessaging().send({
-        token: fcmToken,
-        notification: {
-          title: 'New Vibe Request ✨',
-          body: `${senderName} wants to connect with you!`,
-        },
-        data: {
-          type: 'vibe_request',
-          requestId: event.params.requestId,
-        }
-      });
-    } catch (err) {
-      console.warn('Friend request FCM failed:', err.message);
+// ─── Message Request Notification ───────────────────────────────────────
+exports.onNewMessageRequest = onDocumentCreated(
+  'message_requests/{requestId}',
+  async (event) => {
+    const req = event.data.data();
+    if (req.status !== 'pending') return;
+
+    const senderSnap = await db.doc(`users/${req.senderId}`).get();
+    const sender = senderSnap.exists ? senderSnap.data() : null;
+    const senderName = sender?.displayName || sender?.username || 'Someone';
+
+    await db.collection(`notifications/${req.receiverId}/user_notifs`).add({
+      type: 'message_request',
+      requestId: event.params.requestId,
+      senderId: req.senderId,
+      senderName,
+      body: req.message || 'wants to send you a message',
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    const recipientSnap = await db.doc(`users/${req.receiverId}`).get();
+    if (!recipientSnap.exists) return;
+    const fcmToken = recipientSnap.data().fcmToken;
+    if (fcmToken) {
+      try {
+        await getMessaging().send({
+          token: fcmToken,
+          notification: {
+            title: 'New Message Request 📩',
+            body: `${senderName}: ${req.message || 'Requested a chat'}`,
+          },
+          data: { type: 'message_request', requestId: event.params.requestId }
+        });
+      } catch (err) {}
     }
   }
 );
