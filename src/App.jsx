@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { FirebaseSync } from './lib/firebase';
+import FirebaseSync from './lib/firebase';
 
 import Splash from './pages/Splash';
 import Onboarding1 from './pages/Onboarding1';

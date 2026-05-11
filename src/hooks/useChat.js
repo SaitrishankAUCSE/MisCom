@@ -5,7 +5,8 @@ import {
   doc, updateDoc, getDoc, setDoc,
   deleteField
 } from 'firebase/firestore';
-import { db, FirebaseSync } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import FirebaseSync from '../lib/firebase';
 import { STATUS, markThreadFelt, markThreadReached } from '../lib/messageStatus';
 
 export function useChat(chatId, currentUserId) {

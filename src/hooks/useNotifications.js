@@ -3,7 +3,8 @@ import {
   collection, query, orderBy, limit,
   onSnapshot, updateDoc, doc, writeBatch
 } from 'firebase/firestore';
-import { db, FirebaseSync } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import FirebaseSync from '../lib/firebase';
 import { onForegroundMessage } from '../lib/fcm';
 
 export function useNotifications(uid) {

@@ -7,11 +7,10 @@ import { readFileSync } from 'fs';
 console.log('☢️ WARNING: This will delete ALL users and data from miscom-app.');
 console.log('☢️ Starting in 3 seconds...');
 
-setTimeout(async () => {
+// Starting execution
+(async () => {
   try {
     // We try to initialize with application default credentials
-    // The user should run 'gcloud auth application-default login' first
-    // Or if they are on their local machine with firebase login, it might work.
     admin.initializeApp({
       projectId: 'miscom-app'
     });
@@ -35,9 +34,9 @@ setTimeout(async () => {
     // 2. Wipe Firestore
     console.log('🧹 Wiping Firestore Collections...');
     const collections = await db.listCollections();
-    for (const collection of collections) {
-      console.log(`🗑️ Deleting ${collection.id}...`);
-      await deleteCollection(db, collection);
+    for (const col of collections) {
+      console.log(`🗑️ Deleting ${col.id}...`);
+      await deleteCollection(db, col);
     }
 
     console.log('✨ Mission accomplished. MisCom is now a ghost town.');
@@ -48,7 +47,7 @@ setTimeout(async () => {
     console.log('   gcloud auth application-default login');
     process.exit(1);
   }
-}, 3000);
+})();
 
 async function deleteCollection(db, collection) {
   const query = collection.limit(500);

@@ -1,143 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import TopAppBar from '../components/TopAppBar';
 import { useGlobal } from '../context/GlobalContext';
 import Backend, { AVATARS } from '../lib/backend';
 import FirebaseSync from '../lib/firebase';
 
-export default function Discover() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user, socialVersion } = useGlobal();
-  const [tab, setTab] = useState(location.state?.tab || 'discover');
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [requests, setRequests] = useState([]);
-  const [friends, setFriends] = useState([]);
-  const [toast, setToast] = useState('');
-  const [actionLoading, setActionLoading] = useState(null);
-  const [recentSearches, setRecentSearches] = useState(() => {
-    return JSON.parse(localStorage.getItem('miscom_recent_searches') || '[]');
-  });
-
-  // Refresh when user changes OR when Firebase sync pushes new social data
-  useEffect(() => { refreshData(); }, [user, socialVersion]);
-
-  // Polling fallback — re-check every 3s for new requests
-  useEffect(() => {
-    const interval = setInterval(() => refreshData(), 3000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  const refreshData = () => {
-    if (!user) return;
-    setRequests(Backend.social.getIncomingRequests(user.uid));
-    setFriends(Backend.social.getFriends(user.uid));
-  };  const [searching, setSearching] = useState(false);
-  const [hasSearchedCloud, setHasSearchedCloud] = useState(false);
-
-  // Search logic with debounce
-  useEffect(() => {
-    if (query.length < 2) {
-      setResults([]);
-      setSearching(false);
-      setHasSearchedCloud(false);
-      return;
-    }
-
-    // 1. Instant local search for snappy feel
-    const localResults = Backend.social.searchUsers(query, user.uid);
-    setResults(localResults);
-
-    // 2. Debounced cloud search for global people
-    const timer = setTimeout(() => {
-      if (user && FirebaseSync.isReady()) {
-        setSearching(true);
-        FirebaseSync.searchUsers(query, user.uid).then(fbResults => {
-          setResults(prev => {
-            // Merge & Deduplicate
-            const merged = [...prev];
-            fbResults.forEach(fr => {
-              if (!merged.find(m => m.uid === fr.uid)) merged.push(fr);
-            });
-            return merged;
-          });
-          setHasSearchedCloud(true);
-          setSearching(false);
-        }).catch(() => setSearching(false));
-      }
-    }, 500); // 500ms debounce
-
-    return () => clearTimeout(timer);
-  }, [query, user, socialVersion]);
-
-  const handleConnect = (toId) => {
-    setActionLoading(toId);
-    const r = Backend.social.sendRequest(user.uid, toId);
-    if (r.success) { showToast('Vibe Request sent ✨'); refreshData(); }
-    else showToast(r.error);
-    setTimeout(() => setActionLoading(null), 300);
-  };
-
-  const handleSync = (reqId) => {
-    setActionLoading(reqId);
-    const r = Backend.social.acceptRequest(user.uid, reqId);
-    if (r.success) { 
-      showToast('Synced! You\'re now connected ⚡'); 
-      refreshData();
-      setTab('circle'); // Switch to My Circle
-    }
-    setTimeout(() => setActionLoading(null), 300);
-  };
-
-  const handleIgnore = (reqId) => {
-    Backend.social.declineRequest(user.uid, reqId);
-    showToast('Request ignored');
-    refreshData();
-  };
-
-  const getStatus = (uid) => Backend.social.getRequestStatus(user.uid, uid);
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
-  const reqCount = requests.length;
-
-  // Snapchat-style: "Quick Add" suggestions — show all other users not yet connected
-  const quickAdd = (() => {
-    if (!user) return [];
-    const allUsers = Backend.auth.getAllUsers();
-    const friendIds = friends.map(f => f.uid);
-    const outgoing = Backend.social.getOutgoingRequests(user.uid).map(r => r.to);
-    const incoming = requests.map(r => r.from);
-    
-    const results = allUsers
-      .filter(u => u.uid !== user.uid && 
-                   u.username !== user.username && 
-                   !friendIds.includes(u.uid) && 
-                   !outgoing.includes(u.uid) && 
-                   !incoming.includes(u.uid))
-      .map(u => ({ uid: u.uid, username: u.username, displayName: u.displayName || u.name || u.username, name: u.name, avatar: u.avatar, aura: u.aura }));
-      
-    // Deduplicate by username
-    const unique = [];
-    const seen = new Set();
-    for (const r of results) {
-      if (!seen.has(r.username)) {
-        seen.add(r.username);
-        unique.push(r);
-      }
-    }
-    return unique;
-  })();
-
-  const StatusButton = ({ uid, small }) => {
-    const status = getStatus(uid);
+  // Status Button Sub-component
+  const StatusButton = ({ uid, small, user, requests, handleSync, handleIgnore, handleConnect, actionLoading, navigate }) => {
+    const status = Backend.social.getRequestStatus(user.uid, uid);
     const base = small ? 'px-3 py-1.5 text-[11px]' : 'px-4 py-2 text-xs';
     
     if (uid === user.uid) {
       return <span className={`${base} rounded-full bg-surface-container-low text-secondary font-label-bold`}>It's You</span>;
     }
 
-    // Instead of just showing "Synced", let's give them a message button for friends
     if (status === 'friends') {
       return (
         <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); navigate(`/chat/chat-${[user.uid, uid].sort().join('-')}`); }}
@@ -170,9 +47,8 @@ export default function Discover() {
     );
   };
 
-  const UserCard = ({ u, delay = 0 }) => {
-    const { createOrGetDM } = useGlobal();
-    
+  // User Card Sub-component
+  const UserCard = ({ u, delay = 0, user, navigate, setRecentSearches, createOrGetDM, requests, handleSync, handleIgnore, handleConnect, actionLoading }) => {
     const handleCardClick = () => {
       if (u.uid === user.uid) return;
       
@@ -205,10 +81,144 @@ export default function Discover() {
           <p className="text-[11px] text-secondary truncate">@{u.username}{u.aura ? ` · ${u.aura}` : ''}</p>
         </div>
       </div>
-      <StatusButton uid={u.uid} />
+      <StatusButton 
+        uid={u.uid} 
+        user={user} 
+        requests={requests} 
+        handleSync={handleSync} 
+        handleIgnore={handleIgnore} 
+        handleConnect={handleConnect} 
+        actionLoading={actionLoading} 
+        navigate={navigate} 
+      />
     </motion.div>
     );
   };
+
+export default function Discover() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, socialVersion, createOrGetDM, getVibeRequests } = useGlobal();
+  const [tab, setTab] = useState(location.state?.tab || 'discover');
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [toast, setToast] = useState('');
+  const [actionLoading, setActionLoading] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [hasSearchedCloud, setHasSearchedCloud] = useState(false);
+
+  const requests = getVibeRequests();
+
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('miscom_recent_searches') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  // Refresh when user changes OR when Firebase sync pushes new social data
+  useEffect(() => { refreshData(); }, [user, socialVersion, requests.length]);
+
+  const refreshData = () => {
+    if (!user) return;
+    setFriends(Backend.social.getFriends(user.uid));
+  };
+
+  // Search logic with debounce
+  useEffect(() => {
+    if (query.length < 2) {
+      setResults([]);
+      setSearching(false);
+      setHasSearchedCloud(false);
+      return;
+    }
+
+    // 1. Instant local search for snappy feel
+    const localResults = Backend.social.searchUsers(query, user?.uid);
+    setResults(localResults);
+
+    // 2. Debounced cloud search for global people
+    const timer = setTimeout(() => {
+      if (user && FirebaseSync.isReady()) {
+        setSearching(true);
+        FirebaseSync.searchUsers(query, user.uid).then(fbResults => {
+          setResults(prev => {
+            // Merge & Deduplicate
+            const merged = [...prev];
+            fbResults.forEach(fr => {
+              if (!merged.find(m => m.uid === fr.uid)) merged.push(fr);
+            });
+            return merged;
+          });
+          setHasSearchedCloud(true);
+          setSearching(false);
+        }).catch(() => setSearching(false));
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [query, user, socialVersion]);
+
+  const handleConnect = (toId) => {
+    if (!user) return;
+    setActionLoading(toId);
+    const r = Backend.social.sendRequest(user.uid, toId);
+    if (r.success) { showToast('Vibe Request sent ✨'); refreshData(); }
+    else showToast(r.error);
+    setTimeout(() => setActionLoading(null), 300);
+  };
+
+  const handleSync = (reqId) => {
+    if (!user) return;
+    setActionLoading(reqId);
+    const r = Backend.social.acceptRequest(user.uid, reqId);
+    if (r.success) { 
+      showToast('Synced! You\'re now connected ⚡'); 
+      refreshData();
+      setTab('circle'); // Switch to My Circle
+    }
+    setTimeout(() => setActionLoading(null), 300);
+  };
+
+  const handleIgnore = (reqId) => {
+    if (!user) return;
+    Backend.social.declineRequest(user.uid, reqId);
+    showToast('Request ignored');
+    refreshData();
+  };
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
+  const reqCount = requests.length;
+
+  // Snapchat-style: "Quick Add" suggestions — show all other users not yet connected
+  const quickAdd = (() => {
+    if (!user) return [];
+    const allUsers = Backend.auth.getAllUsers();
+    const friendIds = friends.map(f => f.uid);
+    const outgoing = Backend.social.getOutgoingRequests(user.uid).map(r => r.to);
+    const incoming = requests.map(r => r.from);
+    
+    const res = allUsers
+      .filter(u => u.uid !== user.uid && 
+                   u.username !== user.username && 
+                   !friendIds.includes(u.uid) && 
+                   !outgoing.includes(u.uid) && 
+                   !incoming.includes(u.uid))
+      .map(u => ({ uid: u.uid, username: u.username, displayName: u.displayName || u.name || u.username, name: u.name, avatar: u.avatar, aura: u.aura }));
+      
+    // Deduplicate by username
+    const unique = [];
+    const seen = new Set();
+    for (const r of res) {
+      if (!seen.has(r.username)) {
+        seen.add(r.username);
+        unique.push(r);
+      }
+    }
+    return unique;
+  })();
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-background text-on-background font-body-md min-h-screen pb-24">
@@ -251,7 +261,22 @@ export default function Discover() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {results.map((u, i) => <UserCard key={u.uid} u={u} delay={i * 0.04} />)}
+                {results.map((u, i) => (
+                  <UserCard 
+                    key={u.uid} 
+                    u={u} 
+                    delay={i * 0.04} 
+                    user={user} 
+                    navigate={navigate} 
+                    setRecentSearches={setRecentSearches} 
+                    createOrGetDM={createOrGetDM}
+                    requests={requests}
+                    handleSync={handleSync}
+                    handleIgnore={handleIgnore}
+                    handleConnect={handleConnect}
+                    actionLoading={actionLoading}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -266,7 +291,10 @@ export default function Discover() {
                 </div>
                 <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
                   {recentSearches.map((u) => (
-                    <div key={u.uid} onClick={() => navigate(`/chat/${user.uid < u.uid ? `chat-${user.uid}-${u.uid}` : `chat-${u.uid}-${user.uid}`}`)} 
+                    <div key={u.uid} onClick={() => {
+                      const chatId = createOrGetDM(u.uid);
+                      navigate(`/chat/${chatId}`);
+                    }} 
                       className="flex flex-col items-center gap-2 shrink-0 cursor-pointer">
                       <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-variant ring-2 ring-primary-container/10 ring-offset-1">
                         {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : (
@@ -325,7 +353,22 @@ export default function Discover() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {quickAdd.map((u, i) => <UserCard key={u.uid} u={u} delay={i * 0.04} />)}
+                    {quickAdd.map((u, i) => (
+                      <UserCard 
+                        key={u.uid} 
+                        u={u} 
+                        delay={i * 0.04} 
+                        user={user} 
+                        navigate={navigate} 
+                        setRecentSearches={setRecentSearches} 
+                        createOrGetDM={createOrGetDM}
+                        requests={requests}
+                        handleSync={handleSync}
+                        handleIgnore={handleIgnore}
+                        handleConnect={handleConnect}
+                        actionLoading={actionLoading}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -390,7 +433,10 @@ export default function Discover() {
                   <div className="flex flex-col gap-3">
                     {friends.map((f, i) => (
                       <motion.div key={f.uid} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                        onClick={() => { const chatId = 'chat-' + [user.uid, f.uid].sort().join('-'); navigate(`/chat/${chatId}`); }}
+                        onClick={() => {
+                          const chatId = createOrGetDM(f.uid);
+                          navigate(`/chat/${chatId}`);
+                        }}
                         className="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-on-background/5 shadow-sm cursor-pointer hover:border-primary-container/20 transition-all">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant ring-2 ring-green-400/30 ring-offset-1 shrink-0">

@@ -44,9 +44,31 @@ export default function Signup() {
   // Email validation
   useEffect(() => {
     if (!email) { setEmailValid(null); return; }
-    const timer = setTimeout(() => {
-      setEmailValid(Backend.auth.checkEmail(email));
-    }, 400);
+    const timer = setTimeout(async () => {
+      // 1. Basic format check
+      if (!Backend.V.isEmail(email)) {
+        setEmailValid(false);
+        return;
+      }
+      
+      // 2. Local check
+      const localTaken = !Backend.auth.checkEmail(email);
+      if (localTaken) {
+        setEmailValid(false);
+        return;
+      }
+
+      // 3. Cloud check (if Firebase is ready)
+      if (FirebaseSync.isReady()) {
+        const cloudTaken = await FirebaseSync.checkEmailRegistered(email);
+        if (cloudTaken) {
+          setEmailValid(false);
+          return;
+        }
+      }
+
+      setEmailValid(true);
+    }, 500);
     return () => clearTimeout(timer);
   }, [email]);
 
@@ -283,7 +305,8 @@ export default function Signup() {
             <label className="text-xs font-label-bold text-secondary ml-4 mb-1.5 flex items-center gap-2">
               Email
               {emailValid === true && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-500 text-[10px] font-bold bg-green-500/10 px-2 py-0.5 rounded-full">✓ Available</motion.span>}
-              {emailValid === false && email.length > 3 && <span className="text-red-500 text-[10px] bg-red-500/10 px-2 py-0.5 rounded-full">Already registered or invalid</span>}
+              {emailValid === false && email.length > 3 && !Backend.V.isEmail(email) && <span className="text-red-500 text-[10px] bg-red-500/10 px-2 py-0.5 rounded-full">Invalid email format</span>}
+              {emailValid === false && email.length > 3 && Backend.V.isEmail(email) && <span className="text-red-500 text-[10px] bg-red-500/10 px-2 py-0.5 rounded-full">Email already registered</span>}
               {emailLocked && <span className="text-blue-500 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded-full">🔒 Verified by Google</span>}
             </label>
             <div className="relative">

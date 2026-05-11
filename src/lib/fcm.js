@@ -1,6 +1,7 @@
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { doc, updateDoc }                    from 'firebase/firestore';
-import { db, FirebaseSync }                  from './firebase';
+import { db } from './firebase';
+import FirebaseSync from './firebase';
 
 // Use the VAPID key from environment or a placeholder
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || 'BF_DUMMY_VAPID_KEY_REPLACE_ME';

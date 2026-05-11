@@ -47,23 +47,55 @@ export function GlobalProvider({ children }) {
     setThemeState(t);
   }, []);
 
+  const refreshAll = useCallback(() => {
+    setChats(Backend.chats.getAll());
+    setRooms(Backend.rooms.getAll());
+    setMusic(Backend.music.get());
+    setNotifications(Backend.notifs.getAll());
+    
+    // Fetch vibe requests from local storage (synced from Cloud by startRealtimeSync)
+    const storedVibes = JSON.parse(localStorage.getItem('miscom_vibe_requests') || '[]');
+    setVibeRequests(storedVibes);
+  }, []);
+
+  const logout = useCallback(() => {
+    Backend.auth.logout();
+    FirebaseSync.signOutUser().catch(() => {});
+    setUser(null);
+    setProfile(null);
+    // Aggressively clear local cache keys to ensure a fresh state
+    const keysToClear = [
+      'miscom_session', 'miscom_users', 'miscom_chats', 
+      'miscom_messages', 'miscom_vibe_requests', 'miscom_message_requests',
+      'miscom_rooms', 'miscom_notifs'
+    ];
+    keysToClear.forEach(k => localStorage.removeItem(k));
+    setVibeRequests([]);
+    refreshAll();
+  }, [refreshAll]);
+
   // ── Init: restore session ──
   useEffect(() => {
     Backend.init();
     const saved = Backend.auth.getSession();
     if (saved) {
       setUser(saved);
-      // Fetch Firestore profile to check onboardingCompleted
+      // Fetch Firestore profile to verify session is still valid in the cloud
       if (FirebaseSync.isReady()) {
         FirebaseSync.getUser(saved.uid).then(p => {
-          if (p) setProfile(p);
-        }).catch(() => {});
+          if (p) {
+            setProfile(p);
+          } else {
+            // User exists locally but NOT in cloud (was nuked or deleted)
+            console.warn('[GlobalContext] Session user not found in cloud. Clearing local session.');
+            logout();
+          }
+        }).catch(() => {
+          // If we can't reach the cloud, we stay logged in locally for offline support
+        });
       }
     }
-    setChats(Backend.chats.getAll());
-    setRooms(Backend.rooms.getAll());
-    setMusic(Backend.music.get());
-    setNotifications(Backend.notifs.getAll());
+    refreshAll(); // This now handles chats, rooms, music, and vibe requests
     setIsAuthLoading(false);
 
     if (saved && FirebaseSync.isReady()) {
@@ -91,7 +123,7 @@ export function GlobalProvider({ children }) {
       });
       return () => unsub();
     }
-  }, []);
+  }, [logout, refreshAll]);
 
   // ── Auth ──
   const signup = async (username, email, password) => {
@@ -188,11 +220,8 @@ export function GlobalProvider({ children }) {
     throw new Error('Firebase not configured');
   };
 
-  // Google signup: user already authenticated with Google, now creating account with username + password
   const signupWithGoogle = async (username, email, password) => {
-    // Create local account directly (skip OTP since Google verified email)
     const { user: u } = await Backend.auth.signupDirect(username, email, password, true);
-    // Sync to Firebase
     if (FirebaseSync.isReady()) {
       await FirebaseSync.signUp(email, password).catch(() => {});
       await FirebaseSync.saveUser(u).catch(() => {});
@@ -202,19 +231,12 @@ export function GlobalProvider({ children }) {
     return u;
   };
 
-  const logout = () => {
-    Backend.auth.logout();
-    FirebaseSync.signOutUser().catch(() => {});
-    setUser(null);
-  };
-
   const updateProfile = async (updates) => {
     if (!user) return;
     const updated = Backend.auth.updateProfile(user.uid, updates);
     if (updated) {
       setUser({ ...updated });
       setProfile(prev => ({ ...prev, ...updates }));
-      // Sync to Firebase so changes persist across devices/sessions
       if (FirebaseSync.isReady()) {
         await FirebaseSync.saveUser(updated).catch(() => {});
       }
@@ -229,24 +251,24 @@ export function GlobalProvider({ children }) {
 
   const deleteAccount = async (password) => {
     if (!user) return;
-    
-    // 1. Reauthenticate if using real Firebase
     if (FirebaseSync.isReady()) {
-      await FirebaseSync.reauthenticate(password);
-      // 2. Call the irreversible wipe function
-      await FirebaseSync.deleteAccount();
+      try {
+        await FirebaseSync.reauthenticate(password);
+        await FirebaseSync.deleteAccount();
+      } catch (err) {
+        console.error('[GlobalContext] Cloud deletion failed:', err);
+        throw err;
+      }
     }
-    
-    // 3. Cleanup local data
-    Backend.auth.deleteAccount(user.uid);
-    localStorage.clear(); // Nuclear option for client side
+    logout();
+    localStorage.clear(); 
     setUser(null);
-    window.location.href = '/login';
+    setProfile(null);
+    window.location.href = '/auth-choice';
   };
 
   const isAuthenticated = !!user;
 
-  // ── Permissions ──
   const requestMicrophone = async () => {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -262,23 +284,13 @@ export function GlobalProvider({ children }) {
         setPermissions(p => ({ ...p, contacts: true }));
         return contacts;
       }
-      // Fallback: simulate permission granted
       setPermissions(p => ({ ...p, contacts: true }));
       return [];
     } catch { return []; }
   };
 
-  const refreshAll = useCallback(() => {
-    setChats(Backend.chats.getAll());
-    setRooms(Backend.rooms.getAll());
-    setMusic(Backend.music.get());
-    setNotifications(Backend.notifs.getAll());
-  }, []);
-
   const refreshChats = useCallback(() => setChats(Backend.chats.getAll()), []);
-
   const getMessages = useCallback((id) => Backend.chats.getMessages(id), []);
-
   const sendMessage = useCallback((chatId, text) => {
     const msg = Backend.chats.sendMessage(chatId, text);
     refreshChats();
@@ -288,7 +300,6 @@ export function GlobalProvider({ children }) {
   const markChatRead = useCallback((id) => { Backend.chats.markRead(id); refreshChats(); }, [refreshChats]);
   const deleteChat = useCallback((id) => { Backend.chats.deleteChat(id); refreshChats(); }, [refreshChats]);
 
-  // Instagram-style methods
   const createOrGetDM = useCallback((toUserId) => {
     if (!user) return null;
     const result = Backend.chats.createOrGetDM(user.uid, toUserId);
@@ -299,7 +310,7 @@ export function GlobalProvider({ children }) {
   const getRegularChats = useCallback(() => {
     if (!user) return [];
     return Backend.chats.getRegularChats(user.uid);
-  }, [user, chats]); // Re-evaluate when chats array changes
+  }, [user, chats]);
 
   const getIncomingMessageRequests = useCallback(() => {
     if (!user) return [];
@@ -318,11 +329,11 @@ export function GlobalProvider({ children }) {
     refreshChats();
   }, [refreshChats]);
 
+  const [vibeRequests, setVibeRequests] = useState([]);
+
   const getVibeRequests = useCallback(() => {
-    if (!user) return [];
-    return JSON.parse(localStorage.getItem('miscom_vibe_requests') || '[]')
-      .filter(r => r.to === user.uid && r.status === 'pending');
-  }, [user, socialVersion]);
+    return vibeRequests;
+  }, [vibeRequests]);
 
   const acceptVibeRequest = useCallback(async (requestId) => {
     if (!user) return;

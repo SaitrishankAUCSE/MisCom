@@ -463,7 +463,18 @@ const Backend = {
       return null;
     },
 
-    logout() { localStorage.removeItem(KEYS.SESSION); },
+    logout() { 
+      localStorage.removeItem(KEYS.SESSION);
+      localStorage.removeItem(KEYS.USERS);
+      localStorage.removeItem(KEYS.CHATS);
+      localStorage.removeItem(KEYS.MESSAGES);
+      localStorage.removeItem(KEYS.ROOMS);
+      localStorage.removeItem(KEYS.NOTIFICATIONS);
+      localStorage.removeItem(KEYS.FRIENDS);
+      localStorage.removeItem(KEYS.FRIEND_REQUESTS);
+      localStorage.removeItem(KEYS.MESSAGE_REQUESTS);
+      localStorage.removeItem('miscom_recent_searches');
+    },
 
     isAuthenticated() { return !!get(KEYS.SESSION, null); },
 
@@ -477,7 +488,8 @@ const Backend = {
     checkEmail(e) {
       if (!e || !V.isEmail(e)) return false;
       const users = get(KEYS.USERS, []);
-      return !users.find(x => x.email.toLowerCase() === e.toLowerCase());
+      // Check if any existing user has this email
+      return !users.some(x => (x.email || '').toLowerCase() === e.toLowerCase());
     },
   },
 
@@ -1053,14 +1065,27 @@ const Backend = {
       const reverse = requests.find(r => r.from === toId && r.to === fromId && r.status === 'pending');
       if (reverse) return this.acceptRequest(fromId, reverse.id);
 
-      const req = { id: 'fr-' + Date.now() + Math.random().toString(36).slice(2,6), from: fromId, to: toId, status: 'pending', createdAt: Date.now() };
+      const fromUser = get(KEYS.USERS, []).find(u => u.uid === fromId);
+      const req = { 
+        id: 'fr-' + Date.now() + Math.random().toString(36).slice(2,6), 
+        from: fromId, 
+        to: toId, 
+        status: 'pending', 
+        createdAt: Date.now(),
+        fromUser: fromUser ? {
+          uid: fromUser.uid,
+          username: fromUser.username,
+          displayName: fromUser.displayName || fromUser.name,
+          avatar: fromUser.avatar,
+          aura: fromUser.aura
+        } : null
+      };
       requests.push(req);
       set(KEYS.FRIEND_REQUESTS, requests);
 
       if (FirebaseSync.isReady()) FirebaseSync.sendVibeRequest(req);
 
-      const fromUser = get(KEYS.USERS, []).find(u => u.uid === fromId);
-      Backend.notifs.add({ type: 'social', title: fromUser?.name || 'Someone', body: 'sent you a Vibe Request ✨', icon: 'person_add', targetUserId: toId });
+      Backend.notifs.add({ type: 'social', title: fromUser?.displayName || fromUser?.name || 'Someone', body: 'sent you a Vibe Request ✨', icon: 'person_add', targetUserId: toId });
       return { success: true };
     },
 

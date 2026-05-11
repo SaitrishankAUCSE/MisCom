@@ -196,6 +196,18 @@ const FirebaseSync = {
       return [];
     }
   },
+  
+  async checkEmailRegistered(email) {
+    if (!firebaseReady || !db || !email) return false;
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', email.toLowerCase()), limit(1));
+      const snap = await getDocs(q);
+      return !snap.empty;
+    } catch (err) {
+      console.error('[FirebaseSync] Email check failed:', err);
+      return false;
+    }
+  },
 
   // Update user profile in Firestore
   async updateUser(uid, updates) {
@@ -436,10 +448,20 @@ const FirebaseSync = {
     });
 
     // Sync vibe requests relevant to the current user (incoming or outgoing)
-    const unsubVibeRequests = onSnapshot(collection(db, 'vibe_requests'), (snap) => {
-      const allRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const myRequests = allRequests.filter(r => r.to === uid || r.from === uid);
-      localStorage.setItem('miscom_vibe_requests', JSON.stringify(myRequests));
+    const unsubVibeRequests = onSnapshot(collection(db, 'vibe_requests'), async (snap) => {
+      const rawRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const myRawRequests = rawRequests.filter(r => r.to === uid || r.from === uid);
+      
+      // Hydrate fromUser profile if missing (backward compatibility or deep sync)
+      const hydrated = await Promise.all(myRawRequests.map(async r => {
+        if (r.to === uid && !r.fromUser) {
+          const profile = await this.getUser(r.from);
+          if (profile) return { ...r, fromUser: profile };
+        }
+        return r;
+      }));
+
+      localStorage.setItem('miscom_vibe_requests', JSON.stringify(hydrated));
       if (onUpdate) onUpdate();
     });
 
@@ -520,9 +542,10 @@ const FirebaseSync = {
 
     return () => {
       unsubUsers();
-      unsubRequests();
+      unsubVibeRequests();
+      unsubMsgRequests();
       unsubFriends();
-      unsubChatMeta();
+      unsubChats();
       unsubNotifs();
     };
   },
