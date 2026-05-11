@@ -381,32 +381,35 @@ const Backend = {
       return otp;
     },
 
-    login(identifier, password) {
+    login(identifier, password, skipPasswordCheck = false) {
       return new Promise((resolve, reject) => {
         setTimeout(() => {
           if (!identifier) return reject(new Error('Please enter your username or email'));
-          if (!password) return reject(new Error('Please enter your password'));
+          if (!skipPasswordCheck && !password) return reject(new Error('Please enter your password'));
 
           const cleanId = (identifier || '').trim();
           const users = get(KEYS.USERS, []);
           const isEmail = V.isEmail(cleanId);
           const user = users.find(u =>
-            isEmail ? u.email.toLowerCase() === cleanId.toLowerCase()
-                    : u.username.toLowerCase() === cleanId.toLowerCase()
+            isEmail ? (u.email || '').toLowerCase() === cleanId.toLowerCase()
+                    : (u.username || '').toLowerCase() === cleanId.toLowerCase()
           );
 
           if (!user) return reject(new Error(isEmail ? 'No account found with this email' : 'User not found'));
-          // Auto-verify if they have the correct password
+          
+          // Auto-verify if they are logging in
           if (!user.verified) {
             user.verified = true;
-            const allUsers = get(KEYS.USERS, []);
-            const uIdx = allUsers.findIndex(x => x.uid === user.uid);
+            const uIdx = users.findIndex(x => x.uid === user.uid);
             if (uIdx !== -1) {
-              allUsers[uIdx].verified = true;
-              set(KEYS.USERS, allUsers);
+              users[uIdx].verified = true;
+              set(KEYS.USERS, users);
             }
           }
-          if (user.passwordHash !== simpleHash(password)) return reject(new Error('Incorrect password'));
+
+          if (!skipPasswordCheck && user.passwordHash !== simpleHash(password)) {
+            return reject(new Error('Incorrect password'));
+          }
 
           const token = uid() + '-' + Date.now();
           set(KEYS.SESSION, { uid: user.uid, token, loginAt: Date.now() });

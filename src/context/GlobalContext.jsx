@@ -70,14 +70,42 @@ export function GlobalProvider({ children }) {
   };
 
   const login = async (identifier, password) => {
+    // 1. Try Firebase Auth first if ready
+    if (FirebaseSync.isReady()) {
+      try {
+        // Find user email first (needed for Firebase Sign In)
+        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+        let email = isEmail ? identifier : null;
+        
+        if (!email) {
+          const u = (Backend.auth.getAllUsers()).find(x => x.username.toLowerCase() === identifier.toLowerCase());
+          email = u?.email;
+        }
+
+        if (email) {
+          const fbUser = await FirebaseSync.signIn(email, password);
+          if (fbUser) {
+            // Firebase Auth succeeded! Now get/sync the local user
+            const u = await Backend.auth.login(identifier, password, true); // Pass true to skip local password check
+            setUser(u);
+            refreshAll();
+            await FirebaseSync.saveUser(u).catch(() => {});
+            return u;
+          }
+        }
+      } catch (err) {
+        // If Firebase explicitly says "wrong password", we should stop here
+        if (err.message.includes('password') || err.message.includes('auth/wrong-password')) {
+          throw new Error('Incorrect password');
+        }
+        // For other errors (like user not found in Firebase), fall back to local login
+      }
+    }
+
+    // 2. Fallback to local login
     const u = await Backend.auth.login(identifier, password);
     setUser(u);
     refreshAll();
-    // Sync to Firebase
-    if (FirebaseSync.isReady()) {
-      await FirebaseSync.signIn(u.email, password).catch(() => {});
-      await FirebaseSync.saveUser(u).catch(() => {});
-    }
     return u;
   };
 
